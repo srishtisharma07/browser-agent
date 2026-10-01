@@ -9,7 +9,7 @@ function StatusBadge({ status }) {
     ok:       'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
     error:    'bg-red-500/20 text-red-300 border-red-500/40',
   }
-  const labels = { checking: 'Checking…', ok: 'Backend online', error: 'Backend offline' }
+  const labels = { checking: 'Backend: Checking…', ok: 'Backend: Connected', error: 'Backend: Disconnected' }
 
   return (
     <span
@@ -35,10 +35,13 @@ function StatusBadge({ status }) {
 export default function App() {
   const [backendStatus, setBackendStatus] = useState('checking')
 
-  // Probe the FastAPI health endpoint on load
+  // Probe the FastAPI health endpoint on load.
+  // VITE_API_BASE_URL is read from .env (defaults to '' so Vite proxy handles /api/* in dev).
+  const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
+
   useEffect(() => {
-    fetch('/api/health')
-      .then((r) => r.ok ? r.json() : Promise.reject())
+    fetch(`${API_BASE}/api/health`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((data) => {
         if (data?.status === 'ok') setBackendStatus('ok')
         else setBackendStatus('error')
