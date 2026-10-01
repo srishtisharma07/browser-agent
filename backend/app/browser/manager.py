@@ -1,0 +1,188 @@
+"""
+browser/manager.py — Playwright browser lifecycle management.
+
+Responsibilities
+----------------
+* Start Playwright (sync API via a dedicated thread wrapper)
+* Launch a VISIBLE Chromium browser (headless=False, for SIH demo purposes)
+* Create a BrowserContext and a single Page
+* Tear everything down cleanly so no orphaned Chromium processes remain
+
+What this module does NOT do
+-----------------------------
+* No navigation / clicking / typing
+* No screenshots
+* No agent tool calls
+* No WebSocket streaming
+* No AI / LangGraph integration
+
+Those capabilities will be layered on top in later phases.
+"""
+
+from __future__ import annotations
+
+import logging
+import threading
+from typing import Optional
+
+from playwright.sync_api import (
+    Browser,
+    BrowserContext,
+    Page,
+    Playwright,
+    sync_playwright,
+)
+
+logger = logging.getLogger(__name__)
+
+
+class BrowserManager:
+    """
+    Manages the full lifecycle of one Playwright + Chromium session.
+
+    Usage
+    -----
+    manager = BrowserManager()
+    manager.start()   # opens visible Chromium
+    # ... (future: run agent actions via manager.page) ...
+    manager.close()   # cleans up everything
+    """
+
+    def __init__(self, headless: bool = False) -> None:
+        """
+        Parameters
+        ----------
+        headless:
+            Set to False (default) so Chromium is visible during development
+            and the SIH demo.  Pass True only in CI/testing environments.
+        """
+        self.headless: bool = headless
+
+        # Playwright runtime objects — all None until start() is called.
+        self._playwright: Optional[Playwright] = None
+        self._browser: Optional[Browser] = None
+        self._context: Optional[BrowserContext] = None
+        self._page: Optional[Page] = None
+
+        self._lock = threading.Lock()
+
+    # ── Public API ────────────────────────────────────────────────────
+
+    def start(self) -> None:
+        """
+        Start Playwright, launch Chromium, create a context and a blank page.
+
+        Raises
+        ------
+        RuntimeError
+            If the browser is already running.
+        """
+        with self._lock:
+            if self._browser is not None:
+                raise RuntimeError("BrowserManager is already running. Call close() first.")
+
+            logger.info("Starting Playwright…")
+            self._playwright = sync_playwright().start()
+
+            logger.info("Launching Chromium (headless=%s)…", self.headless)
+            self._browser = self._playwright.chromium.launch(
+                headless=self.headless,
+                args=[
+                    "--disable-blink-features=AutomationControlled",  # less bot-detectable
+                    "--no-first-run",
+                    "--no-default-browser-check",
+                ],
+            )
+
+            logger.info("Creating browser context…")
+            self._context = self._browser.new_context(
+                viewport={"width": 1280, "height": 800},
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/124.0.0.0 Safari/537.36"
+                ),
+            )
+
+            logger.info("Opening blank page…")
+            self._page = self._context.new_page()
+
+        logger.info("BrowserManager started successfully.")
+
+    def close(self) -> None:
+        """
+        Close the page, context, browser, and Playwright runtime in order.
+        Safe to call even if start() was never called.
+        """
+        with self._lock:
+            self._close_unlocked()
+
+    # ── Read-only accessors (raise if not started) ────────────────────
+
+    @property
+    def page(self) -> Page:
+        """The active Playwright Page. Raises if the browser is not running."""
+        if self._page is None:
+            raise RuntimeError("Browser is not running. Call start() first.")
+        return self._page
+
+    @property
+    def context(self) -> BrowserContext:
+        """The active BrowserContext. Raises if the browser is not running."""
+        if self._context is None:
+            raise RuntimeError("Browser is not running. Call start() first.")
+        return self._context
+
+    @property
+    def is_running(self) -> bool:
+        """True if the browser has been started and not yet closed."""
+        return self._browser is not None
+
+    # ── Context-manager support ───────────────────────────────────────
+
+    def __enter__(self) -> "BrowserManager":
+        self.start()
+        return self
+
+    def __exit__(self, *_) -> None:
+        self.close()
+
+    # ── Internal helpers ──────────────────────────────────────────────
+
+    def _close_unlocked(self) -> None:
+        """Tear-down without acquiring the lock (caller must hold it)."""
+        if self._page is not None:
+            try:
+                self._page.close()
+                logger.info("Page closed.")
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Error closing page: %s", exc)
+            finally:
+                self._page = None
+
+        if self._context is not None:
+            try:
+                self._context.close()
+                logger.info("Browser context closed.")
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Error closing context: %s", exc)
+            finally:
+                self._context = None
+
+        if self._browser is not None:
+            try:
+                self._browser.close()
+                logger.info("Chromium closed.")
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Error closing browser: %s", exc)
+            finally:
+                self._browser = None
+
+        if self._playwright is not None:
+            try:
+                self._playwright.stop()
+                logger.info("Playwright stopped.")
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Error stopping Playwright: %s", exc)
+            finally:
+                self._playwright = None
