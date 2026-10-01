@@ -1,6 +1,6 @@
 # AI Browser Agent
 
-**SIH Problem Statement: SIH260171 — AI-Powered Browser Assistant / Agent**
+
 
 ---
 
