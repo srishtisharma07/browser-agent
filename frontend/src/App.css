@@ -1,0 +1,3 @@
+/* App-level styles — intentionally empty.
+   All styling is handled via Tailwind CSS utility classes in JSX.
+   Add component-scoped overrides here only when Tailwind utilities are insufficient. */

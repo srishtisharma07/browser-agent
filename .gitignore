@@ -1,0 +1,66 @@
+# ──────────────────────────────────────────────────────────────────
+# .gitignore – React + Python monorepo
+# ──────────────────────────────────────────────────────────────────
+
+# ── Environment / Secrets ─────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+*.pem
+
+# ── Node / Frontend ───────────────────────────────────────────────
+node_modules/
+dist/
+dist-ssr/
+.cache/
+.npm/
+.eslintcache
+*.local
+
+# ── Python / Backend ──────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+ENV/
+
+# pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# mypy / pyright
+.mypy_cache/
+.pyright/
+pyrightconfig.json
+
+# ── IDEs / Editors ────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── OS ────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Playwright (future) ───────────────────────────────────────────
+playwright-report/
+test-results/
+
+# ── Logs ──────────────────────────────────────────────────────────
+*.log
+logs/

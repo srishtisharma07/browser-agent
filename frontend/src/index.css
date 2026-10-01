@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+/* ─── Custom Design Tokens ──────────────────────────────────────── */
+@theme {
+  --color-brand-900: #0a0f1e;
+  --color-brand-800: #0d1530;
+  --color-brand-700: #111d45;
+  --color-brand-500: #2563eb;
+  --color-brand-400: #3b82f6;
+  --color-brand-300: #60a5fa;
+  --color-accent-500: #7c3aed;
+  --color-accent-400: #8b5cf6;
+  --color-accent-300: #a78bfa;
+
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+}
+
+/* ─── Global Base ───────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--color-brand-900);
+  color: #e2e8f0;
+  -webkit-font-smoothing: antialiased;
+}
