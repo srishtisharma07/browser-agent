@@ -37,11 +37,13 @@ from app.browser.actions import click as execute_click
 from app.browser.actions import fill as execute_fill
 from app.browser.actions import get_page_text as execute_get_page_text
 from app.browser.actions import open_url as execute_open_url
+from app.browser.actions import press as execute_press
 from app.browser.schema import (
     BrowserActionResult,
     BrowserClickResult,
     BrowserFillResult,
     BrowserPageTextResult,
+    BrowserPressResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -204,6 +206,32 @@ class BrowserManager:
                 error="Browser is not running. Call start() first.",
             )
         return execute_fill(self.page, selector, value, timeout_ms=timeout_ms)
+
+    def press(
+        self,
+        selector: str,
+        key: str,
+        timeout_ms: int = 30000,
+    ) -> BrowserPressResult:
+        """
+        Send a keyboard key/combination to the element identified by selector.
+
+        Parameters:
+        - selector: Target element selector.
+        - key: Playwright key name or combination (e.g. 'Enter', 'Tab', 'Control+A').
+        - timeout_ms: Action timeout in milliseconds.
+
+        Returns a BrowserPressResult indicating success or failure.
+        """
+        if not self.is_running:
+            return BrowserPressResult(
+                success=False,
+                selector=selector,
+                key=key,
+                url="",
+                error="Browser is not running. Call start() first.",
+            )
+        return execute_press(self.page, selector, key, timeout_ms=timeout_ms)
 
     # ── Read-only accessors (raise if not started) ────────────────────
 

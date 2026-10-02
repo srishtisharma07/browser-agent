@@ -14,6 +14,7 @@ from app.browser.schema import (
     BrowserClickResult,
     BrowserFillResult,
     BrowserPageTextResult,
+    BrowserPressResult,
 )
 
 if TYPE_CHECKING:
@@ -296,4 +297,86 @@ def fill(
         )
 
 
+def press(
+    page: "Page",
+    selector: str,
+    key: str,
+    timeout_ms: int = 30000,
+) -> BrowserPressResult:
+    """
+    Send a controlled keyboard key/combination to the element at selector.
 
+    Validation rules:
+    - Selector must be a non-empty string.
+    - Key must be a non-empty string (Playwright key name or combination,
+      e.g. 'Enter', 'Tab', 'Control+A').
+    - Uses Playwright's locator(selector).press(key, timeout=timeout_ms).
+    - Does NOT execute arbitrary JavaScript (no page.evaluate / eval).
+    - Playwright validates whether the key name is supported.
+
+    Returns:
+    - BrowserPressResult with success, selector, key, resolved url, and error.
+    """
+    if page is None:
+        return BrowserPressResult(
+            success=False,
+            selector=selector if selector else "",
+            key=key if key else "",
+            url="",
+            error="No active Playwright page available.",
+        )
+
+    if not selector or not isinstance(selector, str) or not selector.strip():
+        return BrowserPressResult(
+            success=False,
+            selector=str(selector) if selector is not None else "",
+            key=key if key else "",
+            url=page.url if page else "",
+            error="Selector must be a non-empty string.",
+        )
+
+    if not key or not isinstance(key, str) or not key.strip():
+        return BrowserPressResult(
+            success=False,
+            selector=selector.strip(),
+            key=str(key) if key is not None else "",
+            url=page.url if page else "",
+            error="Key must be a non-empty string (e.g. 'Enter', 'Tab', 'Control+A').",
+        )
+
+    clean_selector = selector.strip()
+    clean_key = key.strip()
+
+    try:
+        current_url = page.url or ""
+    except Exception as exc:
+        return BrowserPressResult(
+            success=False,
+            selector=clean_selector,
+            key=clean_key,
+            url="",
+            error=f"Failed to access page URL: {exc}",
+        )
+
+    try:
+        logger.info("Pressing key '%s' on element '%s'...", clean_key, clean_selector)
+        page.locator(clean_selector).press(clean_key, timeout=timeout_ms)
+        final_url = page.url or current_url
+
+        logger.info("Successfully pressed '%s' on '%s' (url: '%s')", clean_key, clean_selector, final_url)
+        return BrowserPressResult(
+            success=True,
+            selector=clean_selector,
+            key=clean_key,
+            url=final_url,
+            error=None,
+        )
+    except Exception as exc:
+        logger.warning("Press action failed for selector '%s', key '%s': %s", clean_selector, clean_key, exc)
+        return BrowserPressResult(
+            success=False,
+            selector=clean_selector,
+            key=clean_key,
+            url=current_url,
+            error=f"Press action failed: {exc}",
+        )
