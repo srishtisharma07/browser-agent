@@ -1,5 +1,5 @@
 """
-Agent package - defines state, tools, and single decision engine for the AI Browser Agent.
+Agent package - defines state, tools, decision engine, and LangGraph state machine.
 """
 
 from app.agent.state import (
@@ -18,6 +18,12 @@ from app.agent.decision import (
     build_decision_prompt,
     build_system_instruction,
 )
+from app.agent.graph import (
+    create_agent_graph,
+    run_agent_graph,
+    AgentGraphState,
+    AgentGraphResult,
+)
 
 __all__ = [
     "TaskStatus",
@@ -33,4 +39,8 @@ __all__ = [
     "AgentDecisionResult",
     "build_decision_prompt",
     "build_system_instruction",
+    "create_agent_graph",
+    "run_agent_graph",
+    "AgentGraphState",
+    "AgentGraphResult",
 ]
