@@ -1,5 +1,5 @@
 """
-Agent package - defines state, tools, decision engine, and LangGraph state machine.
+Agent package - defines state, tools, decision engine, LangGraph state machine, and AgentRunner.
 """
 
 from app.agent.state import (
@@ -24,6 +24,10 @@ from app.agent.graph import (
     AgentGraphState,
     AgentGraphResult,
 )
+from app.agent.runner import (
+    AgentRunner,
+    run_agent_task,
+)
 
 __all__ = [
     "TaskStatus",
@@ -43,4 +47,6 @@ __all__ = [
     "run_agent_graph",
     "AgentGraphState",
     "AgentGraphResult",
+    "AgentRunner",
+    "run_agent_task",
 ]
