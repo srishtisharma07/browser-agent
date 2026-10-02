@@ -39,6 +39,7 @@ from app.browser.actions import get_page_text as execute_get_page_text
 from app.browser.actions import open_url as execute_open_url
 from app.browser.actions import press as execute_press
 from app.browser.actions import screenshot as execute_screenshot
+from app.browser.actions import scroll as execute_scroll
 from app.browser.schema import (
     BrowserActionResult,
     BrowserClickResult,
@@ -46,6 +47,7 @@ from app.browser.schema import (
     BrowserPageTextResult,
     BrowserPressResult,
     BrowserScreenshotResult,
+    BrowserScrollResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -257,6 +259,30 @@ class BrowserManager:
                 error="Browser is not running. Call start() first.",
             )
         return execute_screenshot(self.page, path, timeout_ms=timeout_ms)
+
+    def scroll(
+        self,
+        direction: str,
+        amount: int = 800,
+        timeout_ms: int = 30000,
+    ) -> BrowserScrollResult:
+        """
+        Scroll the active page up or down.
+
+        Parameters:
+        - direction: 'up' or 'down'.
+        - amount: Number of pixels to scroll (positive integer).
+        - timeout_ms: Action timeout in milliseconds.
+
+        Returns a BrowserScrollResult indicating success or failure.
+        """
+        if not self.is_running:
+            return BrowserScrollResult(
+                success=False,
+                url="",
+                error="Browser is not running. Call start() first.",
+            )
+        return execute_scroll(self.page, direction, amount=amount, timeout_ms=timeout_ms)
 
     # ── Read-only accessors (raise if not started) ────────────────────
 

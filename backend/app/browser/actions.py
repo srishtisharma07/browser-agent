@@ -17,6 +17,7 @@ from app.browser.schema import (
     BrowserPageTextResult,
     BrowserPressResult,
     BrowserScreenshotResult,
+    BrowserScrollResult,
 )
 
 if TYPE_CHECKING:
@@ -452,4 +453,82 @@ def screenshot(
             image_path=None,
             error=f"Screenshot action failed: {exc}",
         )
+
+
+def scroll(
+    page: "Page",
+    direction: str,
+    amount: int = 800,
+    timeout_ms: int = 30000,
+) -> BrowserScrollResult:
+    """
+    Scroll the active page up or down.
+
+    Validation rules:
+    - Direction must be 'up' or 'down'.
+    - Amount must be a positive integer.
+    - Uses page.mouse.wheel for native browser scrolling.
+    - Does NOT execute arbitrary JavaScript (no page.evaluate / eval).
+
+    Returns:
+    - BrowserScrollResult with success, url, and error.
+    """
+    if page is None:
+        return BrowserScrollResult(
+            success=False,
+            url="",
+            error="No active Playwright page available.",
+        )
+
+    try:
+        current_url = page.url or ""
+    except Exception as exc:
+        return BrowserScrollResult(
+            success=False,
+            url="",
+            error=f"Failed to access page URL: {exc}",
+        )
+
+    if not direction or not isinstance(direction, str) or direction.strip().lower() not in ["up", "down"]:
+        return BrowserScrollResult(
+            success=False,
+            url=current_url,
+            error="Direction must be 'up' or 'down'.",
+        )
+
+    if not isinstance(amount, int) or amount <= 0:
+        return BrowserScrollResult(
+            success=False,
+            url=current_url,
+            error="Amount must be a positive integer.",
+        )
+
+    clean_direction = direction.strip().lower()
+    
+    # Calculate delta based on direction
+    delta_y = amount if clean_direction == "down" else -amount
+
+    try:
+        logger.info("Scrolling %s by %d pixels...", clean_direction, amount)
+        
+        page.mouse.wheel(delta_x=0, delta_y=delta_y)
+        # Give a small pause for the page to visually settle, Playwright is fast
+        page.wait_for_timeout(100)
+        
+        final_url = page.url or current_url
+
+        logger.info("Successfully scrolled %s by %d pixels (url: '%s')", clean_direction, amount, final_url)
+        return BrowserScrollResult(
+            success=True,
+            url=final_url,
+            error=None,
+        )
+    except Exception as exc:
+        logger.warning("Scroll action failed: %s", exc)
+        return BrowserScrollResult(
+            success=False,
+            url=current_url,
+            error=f"Scroll action failed: {exc}",
+        )
+
 

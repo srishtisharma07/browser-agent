@@ -90,3 +90,17 @@ class BrowserScreenshotResult:
     def to_dict(self) -> Dict[str, Any]:
         """Convert result to a plain dictionary for API responses or logs."""
         return asdict(self)
+
+
+@dataclass
+class BrowserScrollResult:
+    """Result schema for scroll operations."""
+
+    success: bool
+    url: str
+    error: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert result to a plain dictionary for API responses or logs."""
+        return asdict(self)
+
