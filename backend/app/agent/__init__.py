@@ -1,5 +1,5 @@
 """
-Agent package - defines the state and models for the AI Browser Agent.
+Agent package - defines state, tools, and single decision engine for the AI Browser Agent.
 """
 
 from app.agent.state import (
@@ -12,6 +12,12 @@ from app.agent.state import (
     AgentState,
 )
 from app.agent.tools import ToolRegistry, ToolDefinition
+from app.agent.decision import (
+    AgentDecisionEngine,
+    AgentDecisionResult,
+    build_decision_prompt,
+    build_system_instruction,
+)
 
 __all__ = [
     "TaskStatus",
@@ -23,4 +29,8 @@ __all__ = [
     "AgentState",
     "ToolRegistry",
     "ToolDefinition",
+    "AgentDecisionEngine",
+    "AgentDecisionResult",
+    "build_decision_prompt",
+    "build_system_instruction",
 ]
