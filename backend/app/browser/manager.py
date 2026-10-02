@@ -40,6 +40,7 @@ from app.browser.actions import open_url as execute_open_url
 from app.browser.actions import press as execute_press
 from app.browser.actions import screenshot as execute_screenshot
 from app.browser.actions import scroll as execute_scroll
+from app.browser.actions import go_back as execute_go_back
 from app.browser.schema import (
     BrowserActionResult,
     BrowserClickResult,
@@ -48,6 +49,7 @@ from app.browser.schema import (
     BrowserPressResult,
     BrowserScreenshotResult,
     BrowserScrollResult,
+    BrowserGoBackResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -283,6 +285,26 @@ class BrowserManager:
                 error="Browser is not running. Call start() first.",
             )
         return execute_scroll(self.page, direction, amount=amount, timeout_ms=timeout_ms)
+
+    def go_back(
+        self,
+        timeout_ms: int = 30000,
+    ) -> BrowserGoBackResult:
+        """
+        Navigate to the previous page in browser history.
+
+        Parameters:
+        - timeout_ms: Action timeout in milliseconds.
+
+        Returns a BrowserGoBackResult indicating success or failure.
+        """
+        if not self.is_running:
+            return BrowserGoBackResult(
+                success=False,
+                url="",
+                error="Browser is not running. Call start() first.",
+            )
+        return execute_go_back(self.page, timeout_ms=timeout_ms)
 
     # ── Read-only accessors (raise if not started) ────────────────────
 

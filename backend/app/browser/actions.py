@@ -18,6 +18,7 @@ from app.browser.schema import (
     BrowserPressResult,
     BrowserScreenshotResult,
     BrowserScrollResult,
+    BrowserGoBackResult,
 )
 
 if TYPE_CHECKING:
@@ -530,5 +531,69 @@ def scroll(
             url=current_url,
             error=f"Scroll action failed: {exc}",
         )
+
+
+def go_back(
+    page: "Page",
+    timeout_ms: int = 30000,
+) -> BrowserGoBackResult:
+    """
+    Navigate to the previous page in browser history.
+
+    Validation rules:
+    - Browser/page must be available.
+    - Uses Playwright's page.go_back().
+    - Does NOT use arbitrary JavaScript or OS-level automation.
+    - Gracefully handles if there is no previous history entry.
+
+    Returns:
+    - BrowserGoBackResult with success, current url, and error.
+    """
+    if page is None:
+        return BrowserGoBackResult(
+            success=False,
+            url="",
+            error="No active Playwright page available.",
+        )
+
+    try:
+        current_url = page.url or ""
+    except Exception as exc:
+        return BrowserGoBackResult(
+            success=False,
+            url="",
+            error=f"Failed to access page URL: {exc}",
+        )
+
+    try:
+        logger.info("Navigating back...")
+        
+        response = page.go_back(timeout=timeout_ms)
+        
+        # Playwright's go_back returns None if there is no previous page
+        if response is None:
+            logger.info("No previous page in history to navigate back to.")
+            return BrowserGoBackResult(
+                success=False,
+                url=current_url,
+                error="No previous history entry available.",
+            )
+            
+        final_url = page.url or current_url
+
+        logger.info("Successfully navigated back to '%s'", final_url)
+        return BrowserGoBackResult(
+            success=True,
+            url=final_url,
+            error=None,
+        )
+    except Exception as exc:
+        logger.warning("Go back action failed: %s", exc)
+        return BrowserGoBackResult(
+            success=False,
+            url=current_url,
+            error=f"Go back action failed: {exc}",
+        )
+
 
 

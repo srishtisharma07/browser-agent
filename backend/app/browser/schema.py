@@ -104,3 +104,17 @@ class BrowserScrollResult:
         """Convert result to a plain dictionary for API responses or logs."""
         return asdict(self)
 
+
+@dataclass
+class BrowserGoBackResult:
+    """Result schema for back navigation operations."""
+
+    success: bool
+    url: str
+    error: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert result to a plain dictionary for API responses or logs."""
+        return asdict(self)
+
+
