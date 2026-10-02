@@ -216,10 +216,12 @@ class AgentDecisionEngine:
             is_success = False
             result_url = None
             summary = ""
+            observation_data = None
 
             if isinstance(exec_result, dict):
                 is_success = exec_result.get("success", False)
                 result_url = exec_result.get("url")
+                observation_data = exec_result.get("observation")
                 if not is_success:
                     summary = f"Tool '{tool_name}' failed: {exec_result.get('error', 'Unknown error')}"
                 else:
@@ -227,6 +229,7 @@ class AgentDecisionEngine:
             elif hasattr(exec_result, "success"):
                 is_success = getattr(exec_result, "success", False)
                 result_url = getattr(exec_result, "url", None)
+                observation_data = getattr(exec_result, "observation", None)
                 if not is_success:
                     summary = f"Tool '{tool_name}' failed: {getattr(exec_result, 'error', 'Unknown error')}"
                 else:
@@ -235,12 +238,25 @@ class AgentDecisionEngine:
                 summary = f"Tool '{tool_name}' returned result."
                 is_success = True
 
+            metadata = {"success": is_success, "arguments": arguments}
+            if observation_data:
+                if hasattr(observation_data, "to_dict"):
+                    metadata.update(observation_data.to_dict())
+                elif isinstance(observation_data, dict):
+                    metadata.update(observation_data)
+                else:
+                    try:
+                        metadata.update(vars(observation_data))
+                    except TypeError:
+                        pass
+
+
             new_state.observations.append(Observation(
                 source=f"tool:{tool_name}",
                 summary=summary,
                 url=result_url,
                 timestamp=timestamp,
-                metadata={"success": is_success, "arguments": arguments}
+                metadata=metadata
             ))
 
             new_state.completed_steps.append(step_desc)

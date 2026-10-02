@@ -22,6 +22,7 @@ from app.browser.schema import (
     BrowserLink,
     BrowserLinksResult,
 )
+from app.browser.observation import observe_page
 
 if TYPE_CHECKING:
     from playwright.sync_api import Page
@@ -83,6 +84,7 @@ def open_url(page: "Page", url: str, timeout_ms: int = 30000) -> BrowserActionRe
             url=final_url,
             title=page_title,
             error=None,
+            observation=observe_page(page)
         )
     except Exception as exc:
         logger.warning("Navigation failed for '%s': %s", raw_url, exc)
@@ -215,6 +217,7 @@ def click(
             selector=clean_selector,
             url=final_url,
             error=None,
+            observation=observe_page(page)
         )
     except Exception as exc:
         logger.warning("Click action failed for selector '%s': %s", clean_selector, exc)
@@ -588,6 +591,7 @@ def go_back(
             success=True,
             url=final_url,
             error=None,
+            observation=observe_page(page)
         )
     except Exception as exc:
         logger.warning("Go back action failed: %s", exc)

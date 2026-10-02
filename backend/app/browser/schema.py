@@ -4,6 +4,7 @@ browser/schema.py — Typed schemas for browser action results.
 
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, Optional
+from app.browser.observation import BrowserObservation
 
 
 @dataclass
@@ -14,6 +15,7 @@ class BrowserActionResult:
     url: str
     title: Optional[str] = None
     error: Optional[str] = None
+    observation: Optional[BrowserObservation] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert result to a plain dictionary for API responses or logs."""
@@ -43,6 +45,7 @@ class BrowserClickResult:
     selector: str
     url: str
     error: Optional[str] = None
+    observation: Optional[BrowserObservation] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert result to a plain dictionary for API responses or logs."""
@@ -112,6 +115,7 @@ class BrowserGoBackResult:
     success: bool
     url: str
     error: Optional[str] = None
+    observation: Optional[BrowserObservation] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert result to a plain dictionary for API responses or logs."""
