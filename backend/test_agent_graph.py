@@ -1,5 +1,5 @@
 """
-test_agent_graph.py — Verification test suite for LangGraph Agent State Machine.
+test_agent_graph.py — Verification test suite for Bounded Autonomous Agent Loop.
 
 Run from backend/ directory:
 
@@ -13,12 +13,19 @@ Tests verified:
 5. Unknown tool rejection (delete_everything rejected safely).
 6. AgentState preservation across graph execution.
 7. Dependency injection works without global singletons or API keys.
-8. Security verification (no eval, exec, shell commands, or direct Playwright calls).
+8. Safety verification (no eval, exec, shell commands, or direct Playwright calls).
+9. Multi-cycle sequential execution (open_url -> get_page_text -> respond).
+10. Max cycles termination limit enforcement (stops at max_cycles=2).
+11. Tool success != Task completion (tool success continues loop).
+12. Consecutive duplicate action loop protection (stops after 3 identical actions).
+13. Explicit STOPPED task status termination.
+14. Invalid max_cycles validation (rejects 0 or negative numbers).
 """
 
 import sys
 import logging
 import inspect
+from typing import List
 from unittest.mock import MagicMock
 
 sys.path.insert(0, ".")
@@ -39,13 +46,29 @@ log = logging.getLogger(__name__)
 
 
 class MockLLMProvider(LLMProvider):
-    """Fake LLM Provider for deterministic graph testing."""
+    """Fake LLM Provider for deterministic single-response testing."""
 
     def __init__(self, response: LLMResponse):
         self.response = response
 
     def generate(self, prompt, tools=None, system_instruction=None):
         return self.response
+
+
+class MockSequentialLLMProvider(LLMProvider):
+    """Fake LLM Provider returning a sequence of responses across multiple graph cycles."""
+
+    def __init__(self, responses: List[LLMResponse]):
+        self.responses = responses
+        self.call_count = 0
+
+    def generate(self, prompt, tools=None, system_instruction=None):
+        if self.call_count < len(self.responses):
+            res = self.responses[self.call_count]
+        else:
+            res = self.responses[-1]
+        self.call_count += 1
+        return res
 
 
 def create_sample_state() -> AgentState:
@@ -73,7 +96,7 @@ def run_agent_graph_tests() -> bool:
     all_passed = True
 
     log.info("=" * 65)
-    log.info("AI Browser Agent — LangGraph State Machine Test Suite")
+    log.info("AI Browser Agent — Bounded Autonomous Loop Test Suite")
     log.info("=" * 65)
 
     try:
@@ -95,7 +118,7 @@ def run_agent_graph_tests() -> bool:
             log.info("✔ LangGraph constructed and compiled successfully!")
 
         # ---------------------------------------------------------------------
-        # TEST 2: Response Path
+        # TEST 2: Single-Cycle Response Path
         # ---------------------------------------------------------------------
         log.info("\nSTEP 2 · Testing Response Path (Direct Text Response)…")
         state2 = create_sample_state()
@@ -111,11 +134,14 @@ def run_agent_graph_tests() -> bool:
         elif res2.verification_status != "response_success":
             log.error("❌ FAILED: Expected verification_status 'response_success', got '%s'", res2.verification_status)
             all_passed = False
+        elif res2.stop_reason != "completed_response":
+            log.error("❌ FAILED: Expected stop_reason 'completed_response', got '%s'", res2.stop_reason)
+            all_passed = False
         elif mock_browser_mgr.method_calls:
             log.error("❌ FAILED: Browser manager was called during text response path")
             all_passed = False
         else:
-            log.info("✔ Response Path PASSED!")
+            log.info("✔ Single-Cycle Response Path PASSED!")
 
         # ---------------------------------------------------------------------
         # TEST 3: Tool-Call Path
@@ -129,21 +155,23 @@ def run_agent_graph_tests() -> bool:
             "error": None
         }
         registry3 = ToolRegistry(mock_browser_mgr)
-        provider3 = MockLLMProvider(LLMResponse(
-            tool_calls=[LLMToolCall(name="open_url", arguments={"url": "https://example.com/jobs"})]
-        ))
+        # Sequence: open_url -> respond
+        provider3 = MockSequentialLLMProvider([
+            LLMResponse(tool_calls=[LLMToolCall(name="open_url", arguments={"url": "https://example.com/jobs"})]),
+            LLMResponse(text="Loaded jobs page successfully.")
+        ])
 
         graph3 = create_agent_graph(tool_registry=registry3, llm_provider=provider3)
         res3 = run_agent_graph(graph3, state3)
 
-        if res3.decision.action != "tool_call":
-            log.error("❌ FAILED: Expected action 'tool_call', got '%s'", res3.decision.action)
+        if res3.cycle_count != 2:
+            log.error("❌ FAILED: Expected cycle_count 2, got %d", res3.cycle_count)
             all_passed = False
-        elif res3.verification_status != "tool_success":
-            log.error("❌ FAILED: Expected verification_status 'tool_success', got '%s'", res3.verification_status)
+        elif res3.verification_status != "response_success":
+            log.error("❌ FAILED: Expected final verification_status 'response_success', got '%s'", res3.verification_status)
             all_passed = False
         elif not mock_browser_mgr.open_url.called:
-            log.error("❌ FAILED: BrowserManager.open_url was not called through ToolRegistry")
+            log.error("❌ FAILED: BrowserManager.open_url was not called")
             all_passed = False
         else:
             log.info("✔ Tool-Call Path PASSED!")
@@ -165,13 +193,13 @@ def run_agent_graph_tests() -> bool:
         ))
 
         graph4 = create_agent_graph(tool_registry=registry4, llm_provider=provider4)
-        res4 = run_agent_graph(graph4, state4)
+        res4 = run_agent_graph(graph4, state4, max_cycles=1)
 
         if res4.verification_status != "action_failed":
             log.error("❌ FAILED: Expected verification_status 'action_failed', got '%s'", res4.verification_status)
             all_passed = False
         elif res4.final_state.task_status == TaskStatus.COMPLETED:
-            log.error("❌ FAILED: Task status was incorrectly set to COMPLETED after single tool failure")
+            log.error("❌ FAILED: Task status was incorrectly set to COMPLETED after tool failure")
             all_passed = False
         else:
             log.info("✔ Tool Failure Handling PASSED!")
@@ -193,8 +221,8 @@ def run_agent_graph_tests() -> bool:
         if res5.decision.action != "error":
             log.error("❌ FAILED: Unknown tool was not rejected with action 'error'")
             all_passed = False
-        elif res5.verification_status != "action_failed":
-            log.error("❌ FAILED: Unknown tool verification status should be 'action_failed'")
+        elif res5.stop_reason != "execution_error":
+            log.error("❌ FAILED: Expected stop_reason 'execution_error', got '%s'", res5.stop_reason)
             all_passed = False
         elif mock_browser_mgr.method_calls:
             log.error("❌ FAILED: Browser action executed for unknown tool")
@@ -237,7 +265,6 @@ def run_agent_graph_tests() -> bool:
         # ---------------------------------------------------------------------
         log.info("\nSTEP 7 · Testing Dependency Injection…")
         try:
-            # Should fail if neither decision_engine nor registry+provider are provided
             create_agent_graph()
             log.error("❌ FAILED: create_agent_graph accepted empty dependencies")
             all_passed = False
@@ -260,13 +287,143 @@ def run_agent_graph_tests() -> bool:
         else:
             log.info("✔ Safety Boundaries PASSED!")
 
+        # ---------------------------------------------------------------------
+        # TEST 9: Multi-Cycle Sequential Execution
+        # ---------------------------------------------------------------------
+        log.info("\nSTEP 9 · Testing Multi-Cycle Sequential Execution (3 turns)…")
+        state9 = create_sample_state()
+        mock_browser_mgr.reset_mock()
+        mock_browser_mgr.open_url.return_value = {"success": True, "url": "https://example.com"}
+        mock_browser_mgr.get_page_text.return_value = {"success": True, "text": "Page text content"}
+        registry9 = ToolRegistry(mock_browser_mgr)
+
+        # Sequence: open_url -> get_page_text -> respond
+        seq_provider = MockSequentialLLMProvider([
+            LLMResponse(tool_calls=[LLMToolCall(name="open_url", arguments={"url": "https://example.com"})]),
+            LLMResponse(tool_calls=[LLMToolCall(name="get_page_text", arguments={"max_length": 500})]),
+            LLMResponse(text="Found content: Page text content.")
+        ])
+
+        graph9 = create_agent_graph(tool_registry=registry9, llm_provider=seq_provider, max_cycles=5)
+        res9 = run_agent_graph(graph9, state9, max_cycles=5)
+
+        if res9.cycle_count != 3:
+            log.error("❌ FAILED: Expected 3 cycles, got %d", res9.cycle_count)
+            all_passed = False
+        elif res9.stop_reason != "completed_response":
+            log.error("❌ FAILED: Expected stop_reason 'completed_response', got '%s'", res9.stop_reason)
+            all_passed = False
+        elif len(res9.final_state.observations) != 3:
+            log.error("❌ FAILED: Expected 3 accumulated observations in state, got %d", len(res9.final_state.observations))
+            all_passed = False
+        else:
+            log.info("✔ Multi-Cycle Sequential Execution PASSED!")
+
+        # ---------------------------------------------------------------------
+        # TEST 10: Max Cycles Termination Limit
+        # ---------------------------------------------------------------------
+        log.info("\nSTEP 10 · Testing Max Cycles Termination Limit (max_cycles=2)…")
+        state10 = create_sample_state()
+        mock_browser_mgr.reset_mock()
+        mock_browser_mgr.scroll.return_value = {"success": True, "url": "https://example.com"}
+        registry10 = ToolRegistry(mock_browser_mgr)
+
+        # Provider continuously returns scroll actions
+        endless_provider = MockLLMProvider(LLMResponse(
+            tool_calls=[LLMToolCall(name="scroll", arguments={"direction": "down", "amount": 100})]
+        ))
+
+        graph10 = create_agent_graph(tool_registry=registry10, llm_provider=endless_provider, max_cycles=2)
+        res10 = run_agent_graph(graph10, state10, max_cycles=2)
+
+        if res10.cycle_count != 2:
+            log.error("❌ FAILED: Expected cycle_count 2, got %d", res10.cycle_count)
+            all_passed = False
+        elif res10.stop_reason != "max_cycles_reached":
+            log.error("❌ FAILED: Expected stop_reason 'max_cycles_reached', got '%s'", res10.stop_reason)
+            all_passed = False
+        elif res10.final_state.task_status == TaskStatus.COMPLETED:
+            log.error("❌ FAILED: Max cycles limit incorrectly marked task COMPLETED")
+            all_passed = False
+        else:
+            log.info("✔ Max Cycles Termination Limit PASSED!")
+
+        # ---------------------------------------------------------------------
+        # TEST 11: Consecutive Duplicate Action Protection
+        # ---------------------------------------------------------------------
+        log.info("\nSTEP 11 · Testing Consecutive Duplicate Action Protection…")
+        state11 = create_sample_state()
+        mock_browser_mgr.reset_mock()
+        mock_browser_mgr.open_url.return_value = {"success": True, "url": "https://example.com"}
+        registry11 = ToolRegistry(mock_browser_mgr)
+
+        repeat_provider = MockLLMProvider(LLMResponse(
+            tool_calls=[LLMToolCall(name="open_url", arguments={"url": "https://example.com"})]
+        ))
+
+        graph11 = create_agent_graph(tool_registry=registry11, llm_provider=repeat_provider, max_cycles=10)
+        res11 = run_agent_graph(graph11, state11, max_cycles=10)
+
+        if res11.cycle_count != 3:
+            log.error("❌ FAILED: Expected loop protection to stop at cycle 3, got %d", res11.cycle_count)
+            all_passed = False
+        elif res11.stop_reason != "consecutive_duplicate_action":
+            log.error("❌ FAILED: Expected stop_reason 'consecutive_duplicate_action', got '%s'", res11.stop_reason)
+            all_passed = False
+        elif not any("Loop protection triggered" in err for err in res11.final_state.errors):
+            log.error("❌ FAILED: Loop protection error was not added to state.errors")
+            all_passed = False
+        else:
+            log.info("✔ Consecutive Duplicate Action Protection PASSED!")
+
+        # ---------------------------------------------------------------------
+        # TEST 12: Explicit STOPPED Task Status Termination
+        # ---------------------------------------------------------------------
+        log.info("\nSTEP 12 · Testing Explicit STOPPED Task Status Termination…")
+        state12 = create_sample_state()
+        state12.task_status = TaskStatus.STOPPED
+        registry12 = ToolRegistry(mock_browser_mgr)
+        provider12 = MockLLMProvider(LLMResponse(
+            tool_calls=[LLMToolCall(name="open_url", arguments={"url": "https://example.com"})]
+        ))
+
+        graph12 = create_agent_graph(tool_registry=registry12, llm_provider=provider12)
+        res12 = run_agent_graph(graph12, state12)
+
+        if res12.stop_reason != "task_stopped":
+            log.error("❌ FAILED: Expected stop_reason 'task_stopped', got '%s'", res12.stop_reason)
+            all_passed = False
+        elif res12.cycle_count != 0:
+            log.error("❌ FAILED: Expected 0 cycles executed when status is STOPPED, got %d", res12.cycle_count)
+            all_passed = False
+        else:
+            log.info("✔ Explicit STOPPED Task Status Termination PASSED!")
+
+        # ---------------------------------------------------------------------
+        # TEST 13: Invalid max_cycles Validation
+        # ---------------------------------------------------------------------
+        log.info("\nSTEP 13 · Testing Invalid max_cycles Validation…")
+        try:
+            create_agent_graph(tool_registry=registry1, llm_provider=provider1, max_cycles=0)
+            log.error("❌ FAILED: Accepted max_cycles=0")
+            all_passed = False
+        except ValueError:
+            log.info("✔ Accepted max_cycles validation rejection for 0.")
+
+        try:
+            run_agent_graph(graph1, state2, max_cycles=-5)
+            log.error("❌ FAILED: Accepted max_cycles=-5")
+            all_passed = False
+        except ValueError:
+            log.info("✔ Accepted max_cycles validation rejection for negative number.")
+
     except Exception as exc:
         log.error("❌ Test suite crashed: %s", exc, exc_info=True)
         all_passed = False
 
     log.info("=" * 65)
     if all_passed:
-        log.info("OVERALL RESULT: ALL LANGGRAPH TESTS PASSED SUCCESSFULLY! 🎉")
+        log.info("OVERALL RESULT: ALL AGENT GRAPH LOOP TESTS PASSED SUCCESSFULLY! 🎉")
     else:
         log.error("OVERALL RESULT: SOME TESTS FAILED.")
     log.info("=" * 65)
