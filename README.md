@@ -1,17 +1,6 @@
 # AI Browser Agent
 
 
-
----
-
-## Project Vision
-
-AI Browser Agent is an intelligent, autonomous browser assistant built for Smart India Hackathon 2024.
-The system will leverage a large language model (Google Gemini) orchestrated by LangGraph to interpret
-natural-language instructions and autonomously control a Chromium browser via Playwright — enabling
-end-to-end web tasks such as job searching, form filling, and multi-step research workflows with
-minimal human intervention.
-
 > **Phase 1 status:** Repository initialised. Browser automation and the AI agent are **not yet implemented.**
 
 ---
