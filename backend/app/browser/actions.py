@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 from app.browser.schema import (
     BrowserActionResult,
     BrowserClickResult,
+    BrowserFillResult,
     BrowserPageTextResult,
 )
 
@@ -216,5 +217,83 @@ def click(
             url=current_url,
             error=f"Click action failed: {exc}",
         )
+
+
+def fill(
+    page: "Page",
+    selector: str,
+    value: str,
+    timeout_ms: int = 30000,
+) -> BrowserFillResult:
+    """
+    Fill an input, textarea, or form field on the given Playwright Page using a controlled selector.
+
+    Validation rules:
+    - Selector must be a non-empty string.
+    - Value must be a valid string instance.
+    - Uses Playwright's locator(selector).fill(value, timeout=timeout_ms).
+    - Does NOT execute arbitrary JavaScript (no page.evaluate / eval).
+    - Does NOT log sensitive field values.
+
+    Returns:
+    - BrowserFillResult with success, selector, resolved url, and error message.
+    """
+    if page is None:
+        return BrowserFillResult(
+            success=False,
+            selector=selector if selector else "",
+            url="",
+            error="No active Playwright page available.",
+        )
+
+    if not selector or not isinstance(selector, str) or not selector.strip():
+        return BrowserFillResult(
+            success=False,
+            selector=str(selector) if selector is not None else "",
+            url=page.url if page else "",
+            error="Selector must be a non-empty string.",
+        )
+
+    if value is None or not isinstance(value, str):
+        return BrowserFillResult(
+            success=False,
+            selector=selector.strip(),
+            url=page.url if page else "",
+            error="Value must be a valid string instance.",
+        )
+
+    clean_selector = selector.strip()
+
+    try:
+        current_url = page.url or ""
+    except Exception as exc:
+        return BrowserFillResult(
+            success=False,
+            selector=clean_selector,
+            url="",
+            error=f"Failed to access page URL: {exc}",
+        )
+
+    try:
+        logger.info("Filling element with selector '%s' (content length: %d)...", clean_selector, len(value))
+        page.locator(clean_selector).fill(value, timeout=timeout_ms)
+        final_url = page.url or current_url
+
+        logger.info("Successfully filled element '%s' (url: '%s')", clean_selector, final_url)
+        return BrowserFillResult(
+            success=True,
+            selector=clean_selector,
+            url=final_url,
+            error=None,
+        )
+    except Exception as exc:
+        logger.warning("Fill action failed for selector '%s': %s", clean_selector, exc)
+        return BrowserFillResult(
+            success=False,
+            selector=clean_selector,
+            url=current_url,
+            error=f"Fill action failed: {exc}",
+        )
+
 
 

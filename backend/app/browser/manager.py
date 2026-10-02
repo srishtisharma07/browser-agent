@@ -34,11 +34,13 @@ from playwright.sync_api import (
 )
 
 from app.browser.actions import click as execute_click
+from app.browser.actions import fill as execute_fill
 from app.browser.actions import get_page_text as execute_get_page_text
 from app.browser.actions import open_url as execute_open_url
 from app.browser.schema import (
     BrowserActionResult,
     BrowserClickResult,
+    BrowserFillResult,
     BrowserPageTextResult,
 )
 
@@ -177,6 +179,31 @@ class BrowserManager:
                 error="Browser is not running. Call start() first.",
             )
         return execute_click(self.page, selector, timeout_ms=timeout_ms)
+
+    def fill(
+        self,
+        selector: str,
+        value: str,
+        timeout_ms: int = 30000,
+    ) -> BrowserFillResult:
+        """
+        Fill an input, textarea, or form field on the active page identified by selector.
+
+        Parameters:
+        - selector: Target form control selector.
+        - value: Text string to fill into the input control.
+        - timeout_ms: Action timeout in milliseconds.
+
+        Returns a BrowserFillResult indicating success or failure.
+        """
+        if not self.is_running:
+            return BrowserFillResult(
+                success=False,
+                selector=selector,
+                url="",
+                error="Browser is not running. Call start() first.",
+            )
+        return execute_fill(self.page, selector, value, timeout_ms=timeout_ms)
 
     # ── Read-only accessors (raise if not started) ────────────────────
 
