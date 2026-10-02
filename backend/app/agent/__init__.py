@@ -11,6 +11,7 @@ from app.agent.state import (
     ApprovalRequest,
     AgentState,
 )
+from app.agent.tools import ToolRegistry, ToolDefinition
 
 __all__ = [
     "TaskStatus",
@@ -20,4 +21,6 @@ __all__ = [
     "DiscoveredItem",
     "ApprovalRequest",
     "AgentState",
+    "ToolRegistry",
+    "ToolDefinition",
 ]
