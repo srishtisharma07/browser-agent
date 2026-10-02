@@ -33,6 +33,9 @@ from playwright.sync_api import (
     sync_playwright,
 )
 
+from app.browser.actions import open_url as execute_open_url
+from app.browser.schema import BrowserActionResult
+
 logger = logging.getLogger(__name__)
 
 
@@ -44,7 +47,7 @@ class BrowserManager:
     -----
     manager = BrowserManager()
     manager.start()   # opens visible Chromium
-    # ... (future: run agent actions via manager.page) ...
+    result = manager.open_url("https://example.com")
     manager.close()   # cleans up everything
     """
 
@@ -116,6 +119,20 @@ class BrowserManager:
         """
         with self._lock:
             self._close_unlocked()
+
+    def open_url(self, url: str, timeout_ms: int = 30000) -> BrowserActionResult:
+        """
+        Navigate the active browser page to the specified HTTP/HTTPS URL.
+
+        Returns a BrowserActionResult indicating success or failure.
+        """
+        if not self.is_running:
+            return BrowserActionResult(
+                success=False,
+                url=url,
+                error="Browser is not running. Call start() first.",
+            )
+        return execute_open_url(self.page, url, timeout_ms=timeout_ms)
 
     # ── Read-only accessors (raise if not started) ────────────────────
 
