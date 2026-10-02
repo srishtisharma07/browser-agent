@@ -1,15 +1,17 @@
 """
 Single Agent Decision Engine for AI Browser Agent.
 Executes exactly one decision cycle connecting AgentState, ToolRegistry, and LLMProvider.
+Includes Human-in-the-Loop approval gate before consequential actions.
 """
 
 from datetime import datetime
 from typing import Any, Dict, Literal, Optional
 from pydantic import BaseModel, Field
 
-from app.agent.state import AgentState, Observation
+from app.agent.state import AgentState, Observation, TaskStatus
 from app.agent.tools import ToolRegistry
 from app.llm.provider import LLMProvider, LLMResponse
+from app.safety.approval import ApprovalGate, is_consequential
 
 
 class AgentDecisionResult(BaseModel):
@@ -97,12 +99,18 @@ def build_decision_prompt(state: AgentState) -> str:
 class AgentDecisionEngine:
     """
     Executes a single, controlled decision cycle for the AI Browser Agent.
-    Strictly enforces security boundaries: LLM decisions -> ToolRegistry validation -> Execution.
+    Strictly enforces security boundaries: LLM decisions -> ApprovalGate -> ToolRegistry -> Execution.
     """
 
-    def __init__(self, tool_registry: ToolRegistry, llm_provider: LLMProvider):
+    def __init__(
+        self,
+        tool_registry: ToolRegistry,
+        llm_provider: LLMProvider,
+        approval_gate: Optional[ApprovalGate] = None,
+    ):
         self.tool_registry = tool_registry
         self.llm_provider = llm_provider
+        self.approval_gate: ApprovalGate = approval_gate or ApprovalGate()
 
     def execute_cycle(self, state: AgentState) -> AgentDecisionResult:
         """
@@ -164,7 +172,27 @@ class AgentDecisionEngine:
             tool_name = tool_call.name
             arguments = tool_call.arguments
 
-            # Validate tool exists in registry
+            # --- Approval Gate: check BEFORE registry validation ---
+            # Consequential actions (e.g. submit_application) are intercepted here
+            # even if they are not registered in ToolRegistry.
+            gated_state = self.approval_gate.check(
+                action_name=tool_name,
+                description=f"Agent wants to execute '{tool_name}' with args: {arguments}",
+                state=new_state,
+                target=arguments.get("url") or arguments.get("selector"),
+            )
+            if gated_state.task_status == TaskStatus.WAITING_FOR_APPROVAL:
+                # Action is paused — do NOT execute. Return approval-pending result.
+                return AgentDecisionResult(
+                    action="tool_call",
+                    tool_name=tool_name,
+                    arguments=arguments,
+                    tool_result=None,
+                    updated_state=gated_state,
+                )
+            new_state = gated_state
+
+            # Validate tool exists in registry (only reached for non-consequential tools)
             if not self.tool_registry.has(tool_name):
                 error_msg = f"Rejected unknown tool call: '{tool_name}' is not registered."
                 new_state.errors.append(error_msg)
