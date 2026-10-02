@@ -33,9 +33,14 @@ from playwright.sync_api import (
     sync_playwright,
 )
 
+from app.browser.actions import click as execute_click
 from app.browser.actions import get_page_text as execute_get_page_text
 from app.browser.actions import open_url as execute_open_url
-from app.browser.schema import BrowserActionResult, BrowserPageTextResult
+from app.browser.schema import (
+    BrowserActionResult,
+    BrowserClickResult,
+    BrowserPageTextResult,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -153,6 +158,25 @@ class BrowserManager:
                 error="Browser is not running. Call start() first.",
             )
         return execute_get_page_text(self.page, max_length=max_length)
+
+    def click(self, selector: str, timeout_ms: int = 30000) -> BrowserClickResult:
+        """
+        Click an element on the active page identified by selector.
+
+        Parameters:
+        - selector: Element CSS/text selector.
+        - timeout_ms: Action timeout in milliseconds.
+
+        Returns a BrowserClickResult indicating success or failure.
+        """
+        if not self.is_running:
+            return BrowserClickResult(
+                success=False,
+                selector=selector,
+                url="",
+                error="Browser is not running. Call start() first.",
+            )
+        return execute_click(self.page, selector, timeout_ms=timeout_ms)
 
     # ── Read-only accessors (raise if not started) ────────────────────
 

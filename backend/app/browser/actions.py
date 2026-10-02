@@ -9,7 +9,11 @@ import logging
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
-from app.browser.schema import BrowserActionResult, BrowserPageTextResult
+from app.browser.schema import (
+    BrowserActionResult,
+    BrowserClickResult,
+    BrowserPageTextResult,
+)
 
 if TYPE_CHECKING:
     from playwright.sync_api import Page
@@ -146,4 +150,71 @@ def get_page_text(
             truncated=False,
             error=f"Page text extraction failed: {exc}",
         )
+
+
+def click(
+    page: "Page",
+    selector: str,
+    timeout_ms: int = 30000,
+) -> BrowserClickResult:
+    """
+    Click an element on the given Playwright Page using a controlled selector.
+
+    Validation rules:
+    - Selector must be a non-empty string.
+    - Uses Playwright's locator(selector).click(timeout=timeout_ms).
+    - Does NOT execute arbitrary JavaScript (no page.evaluate / eval).
+
+    Returns:
+    - BrowserClickResult with success, selector, resolved url, and error message.
+    """
+    if page is None:
+        return BrowserClickResult(
+            success=False,
+            selector=selector if selector else "",
+            url="",
+            error="No active Playwright page available.",
+        )
+
+    if not selector or not isinstance(selector, str) or not selector.strip():
+        return BrowserClickResult(
+            success=False,
+            selector=str(selector) if selector is not None else "",
+            url=page.url if page else "",
+            error="Selector must be a non-empty string.",
+        )
+
+    clean_selector = selector.strip()
+
+    try:
+        current_url = page.url or ""
+    except Exception as exc:
+        return BrowserClickResult(
+            success=False,
+            selector=clean_selector,
+            url="",
+            error=f"Failed to access page URL: {exc}",
+        )
+
+    try:
+        logger.info("Clicking element with selector '%s'...", clean_selector)
+        page.locator(clean_selector).click(timeout=timeout_ms)
+        final_url = page.url or current_url
+
+        logger.info("Successfully clicked element '%s' (url: '%s')", clean_selector, final_url)
+        return BrowserClickResult(
+            success=True,
+            selector=clean_selector,
+            url=final_url,
+            error=None,
+        )
+    except Exception as exc:
+        logger.warning("Click action failed for selector '%s': %s", clean_selector, exc)
+        return BrowserClickResult(
+            success=False,
+            selector=clean_selector,
+            url=current_url,
+            error=f"Click action failed: {exc}",
+        )
+
 

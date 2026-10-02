@@ -33,3 +33,17 @@ class BrowserPageTextResult:
     def to_dict(self) -> Dict[str, Any]:
         """Convert result to a plain dictionary for API responses or logs."""
         return asdict(self)
+
+
+@dataclass
+class BrowserClickResult:
+    """Result schema for click operations."""
+
+    success: bool
+    selector: str
+    url: str
+    error: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert result to a plain dictionary for API responses or logs."""
+        return asdict(self)
