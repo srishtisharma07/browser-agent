@@ -80,6 +80,12 @@ def build_decision_prompt(state: AgentState) -> str:
         f"- {r.title}: {r.reason}" for r in state.rejected_items
     ) or "None"
 
+    # Explicitly surface recent errors so the LLM can reason about failures
+    # and choose an alternative action (recovery). This is the mechanism that
+    # makes recovery LLM-driven rather than hard-coded.
+    recent_errors = state.errors[-3:] if state.errors else []
+    errors_str = "\n".join(f"- {e}" for e in recent_errors) or "None"
+
     return (
         f"CURRENT TASK STATE:\n"
         f"Task ID: {state.task_id}\n"
@@ -90,6 +96,7 @@ def build_decision_prompt(state: AgentState) -> str:
         f"Completed Steps:\n{completed_str}\n\n"
         f"Current Step: {state.current_step or 'Starting'}\n\n"
         f"Recent Observations:\n{obs_str}\n\n"
+        f"Recent Errors (use these to choose a recovery action if needed):\n{errors_str}\n\n"
         f"Discovered Items:\n{disc_str}\n\n"
         f"Rejected Items:\n{rej_str}\n\n"
         f"Instructions: Based on the state above, decide whether to call ONE browser tool or provide a direct final response."
