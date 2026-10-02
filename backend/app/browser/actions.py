@@ -9,7 +9,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
-from app.browser.schema import BrowserActionResult
+from app.browser.schema import BrowserActionResult, BrowserPageTextResult
 
 if TYPE_CHECKING:
     from playwright.sync_api import Page
@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 ALLOWED_SCHEMES = {"http", "https"}
+DEFAULT_MAX_TEXT_LENGTH = 20000
 
 
 def open_url(page: "Page", url: str, timeout_ms: int = 30000) -> BrowserActionResult:
@@ -79,3 +80,70 @@ def open_url(page: "Page", url: str, timeout_ms: int = 30000) -> BrowserActionRe
             title=None,
             error=f"Navigation failed: {exc}",
         )
+
+
+def get_page_text(
+    page: "Page",
+    max_length: int = DEFAULT_MAX_TEXT_LENGTH,
+) -> BrowserPageTextResult:
+    """
+    Extract visible readable text content from the given Playwright Page body.
+
+    Parameters:
+    - page: Active Playwright Page instance.
+    - max_length: Maximum allowed character length for extracted text (default: 20000).
+
+    Returns:
+    - BrowserPageTextResult with success, text, url, truncated flag, and error message.
+    """
+    if page is None:
+        return BrowserPageTextResult(
+            success=False,
+            url="",
+            text=None,
+            truncated=False,
+            error="No active Playwright page available.",
+        )
+
+    try:
+        current_url = page.url or ""
+    except Exception as exc:
+        return BrowserPageTextResult(
+            success=False,
+            url="",
+            text=None,
+            truncated=False,
+            error=f"Failed to access page URL: {exc}",
+        )
+
+    try:
+        body_locator = page.locator("body")
+        if body_locator.count() == 0:
+            raw_text = page.inner_text("html") if page.locator("html").count() > 0 else ""
+        else:
+            raw_text = body_locator.inner_text()
+
+        text_content = raw_text.strip() if raw_text else ""
+
+        truncated = False
+        if max_length > 0 and len(text_content) > max_length:
+            text_content = text_content[:max_length]
+            truncated = True
+
+        return BrowserPageTextResult(
+            success=True,
+            url=current_url,
+            text=text_content,
+            truncated=truncated,
+            error=None,
+        )
+    except Exception as exc:
+        logger.warning("Failed to extract page text from '%s': %s", current_url, exc)
+        return BrowserPageTextResult(
+            success=False,
+            url=current_url,
+            text=None,
+            truncated=False,
+            error=f"Page text extraction failed: {exc}",
+        )
+

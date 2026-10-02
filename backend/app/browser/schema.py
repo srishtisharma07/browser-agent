@@ -8,11 +8,26 @@ from typing import Any, Dict, Optional
 
 @dataclass
 class BrowserActionResult:
-    """Standardized result schema for browser operations."""
+    """Standardized result schema for general browser operations."""
 
     success: bool
     url: str
     title: Optional[str] = None
+    error: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert result to a plain dictionary for API responses or logs."""
+        return asdict(self)
+
+
+@dataclass
+class BrowserPageTextResult:
+    """Result schema for page text extraction operations."""
+
+    success: bool
+    url: str
+    text: Optional[str] = None
+    truncated: bool = False
     error: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:

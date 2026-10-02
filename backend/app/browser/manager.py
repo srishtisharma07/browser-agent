@@ -33,8 +33,9 @@ from playwright.sync_api import (
     sync_playwright,
 )
 
+from app.browser.actions import get_page_text as execute_get_page_text
 from app.browser.actions import open_url as execute_open_url
-from app.browser.schema import BrowserActionResult
+from app.browser.schema import BrowserActionResult, BrowserPageTextResult
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +134,25 @@ class BrowserManager:
                 error="Browser is not running. Call start() first.",
             )
         return execute_open_url(self.page, url, timeout_ms=timeout_ms)
+
+    def get_page_text(self, max_length: int = 20000) -> BrowserPageTextResult:
+        """
+        Extract readable visible text content from the active browser page.
+
+        Parameters:
+        - max_length: Maximum allowed text character length (default: 20000).
+
+        Returns a BrowserPageTextResult with success status, extracted text, url, truncation flag, or error.
+        """
+        if not self.is_running:
+            return BrowserPageTextResult(
+                success=False,
+                url="",
+                text=None,
+                truncated=False,
+                error="Browser is not running. Call start() first.",
+            )
+        return execute_get_page_text(self.page, max_length=max_length)
 
     # ── Read-only accessors (raise if not started) ────────────────────
 
