@@ -8,6 +8,7 @@ Currently provides:
 import logging
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
+from pathlib import Path
 
 from app.browser.schema import (
     BrowserActionResult,
@@ -15,6 +16,7 @@ from app.browser.schema import (
     BrowserFillResult,
     BrowserPageTextResult,
     BrowserPressResult,
+    BrowserScreenshotResult,
 )
 
 if TYPE_CHECKING:
@@ -380,3 +382,74 @@ def press(
             url=current_url,
             error=f"Press action failed: {exc}",
         )
+
+
+def screenshot(
+    page: "Page",
+    path: str,
+    timeout_ms: int = 30000,
+) -> BrowserScreenshotResult:
+    """
+    Take a screenshot of the active page and save it to `path`.
+
+    Validation rules:
+    - Path must be a non-empty string.
+    - Creates parent directories if they do not exist.
+    - Does NOT execute arbitrary JavaScript (no page.evaluate / eval).
+
+    Returns:
+    - BrowserScreenshotResult with success, url, image_path, and error.
+    """
+    if page is None:
+        return BrowserScreenshotResult(
+            success=False,
+            url="",
+            image_path=None,
+            error="No active Playwright page available.",
+        )
+
+    if not path or not isinstance(path, str) or not path.strip():
+        return BrowserScreenshotResult(
+            success=False,
+            url=page.url if page else "",
+            image_path=None,
+            error="Path must be a non-empty string.",
+        )
+
+    clean_path = path.strip()
+
+    try:
+        current_url = page.url or ""
+    except Exception as exc:
+        return BrowserScreenshotResult(
+            success=False,
+            url="",
+            image_path=None,
+            error=f"Failed to access page URL: {exc}",
+        )
+
+    try:
+        logger.info("Taking screenshot and saving to '%s'...", clean_path)
+        
+        target_path = Path(clean_path)
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        page.screenshot(path=str(target_path), timeout=timeout_ms)
+        final_url = page.url or current_url
+
+        logger.info("Successfully saved screenshot to '%s' (url: '%s')", str(target_path), final_url)
+        return BrowserScreenshotResult(
+            success=True,
+            url=final_url,
+            image_path=str(target_path),
+            error=None,
+        )
+    except Exception as exc:
+        logger.warning("Screenshot action failed for path '%s': %s", clean_path, exc)
+        return BrowserScreenshotResult(
+            success=False,
+            url=current_url,
+            image_path=None,
+            error=f"Screenshot action failed: {exc}",
+        )
+

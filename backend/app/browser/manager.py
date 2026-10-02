@@ -38,12 +38,14 @@ from app.browser.actions import fill as execute_fill
 from app.browser.actions import get_page_text as execute_get_page_text
 from app.browser.actions import open_url as execute_open_url
 from app.browser.actions import press as execute_press
+from app.browser.actions import screenshot as execute_screenshot
 from app.browser.schema import (
     BrowserActionResult,
     BrowserClickResult,
     BrowserFillResult,
     BrowserPageTextResult,
     BrowserPressResult,
+    BrowserScreenshotResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -232,6 +234,29 @@ class BrowserManager:
                 error="Browser is not running. Call start() first.",
             )
         return execute_press(self.page, selector, key, timeout_ms=timeout_ms)
+
+    def screenshot(
+        self,
+        path: str,
+        timeout_ms: int = 30000,
+    ) -> BrowserScreenshotResult:
+        """
+        Take a screenshot of the active page and save it to path.
+
+        Parameters:
+        - path: File path where the screenshot should be saved.
+        - timeout_ms: Action timeout in milliseconds.
+
+        Returns a BrowserScreenshotResult indicating success or failure.
+        """
+        if not self.is_running:
+            return BrowserScreenshotResult(
+                success=False,
+                url="",
+                image_path=None,
+                error="Browser is not running. Call start() first.",
+            )
+        return execute_screenshot(self.page, path, timeout_ms=timeout_ms)
 
     # ── Read-only accessors (raise if not started) ────────────────────
 

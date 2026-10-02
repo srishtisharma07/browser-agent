@@ -2,7 +2,7 @@
 browser package — Browser automation primitives for AI Browser Agent backend.
 """
 
-from app.browser.actions import click, fill, get_page_text, open_url, press
+from app.browser.actions import click, fill, get_page_text, open_url, press, screenshot
 from app.browser.manager import BrowserManager
 from app.browser.schema import (
     BrowserActionResult,
@@ -10,6 +10,7 @@ from app.browser.schema import (
     BrowserFillResult,
     BrowserPageTextResult,
     BrowserPressResult,
+    BrowserScreenshotResult,
 )
 
 __all__ = [
@@ -19,9 +20,11 @@ __all__ = [
     "click",
     "fill",
     "press",
+    "screenshot",
     "BrowserActionResult",
     "BrowserPageTextResult",
     "BrowserClickResult",
     "BrowserFillResult",
     "BrowserPressResult",
+    "BrowserScreenshotResult",
 ]
