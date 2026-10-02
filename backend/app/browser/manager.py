@@ -41,6 +41,7 @@ from app.browser.actions import press as execute_press
 from app.browser.actions import screenshot as execute_screenshot
 from app.browser.actions import scroll as execute_scroll
 from app.browser.actions import go_back as execute_go_back
+from app.browser.actions import get_links as execute_get_links
 from app.browser.schema import (
     BrowserActionResult,
     BrowserClickResult,
@@ -50,6 +51,8 @@ from app.browser.schema import (
     BrowserScreenshotResult,
     BrowserScrollResult,
     BrowserGoBackResult,
+    BrowserLink,
+    BrowserLinksResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -305,6 +308,30 @@ class BrowserManager:
                 error="Browser is not running. Call start() first.",
             )
         return execute_go_back(self.page, timeout_ms=timeout_ms)
+
+    def get_links(
+        self,
+        max_links: int = 100,
+        timeout_ms: int = 30000,
+    ) -> BrowserLinksResult:
+        """
+        Extract visible/usable links from the current page.
+
+        Parameters:
+        - max_links: Maximum number of links to extract.
+        - timeout_ms: Action timeout in milliseconds.
+
+        Returns a BrowserLinksResult indicating success or failure and containing the links.
+        """
+        if not self.is_running:
+            return BrowserLinksResult(
+                success=False,
+                url="",
+                links=[],
+                truncated=False,
+                error="Browser is not running. Call start() first.",
+            )
+        return execute_get_links(self.page, max_links=max_links, timeout_ms=timeout_ms)
 
     # ── Read-only accessors (raise if not started) ────────────────────
 

@@ -118,3 +118,29 @@ class BrowserGoBackResult:
         return asdict(self)
 
 
+@dataclass
+class BrowserLink:
+    """Schema for a single extracted link."""
+    text: str
+    url: str
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class BrowserLinksResult:
+    """Result schema for link extraction operations."""
+    success: bool
+    url: str
+    links: list[BrowserLink]
+    truncated: bool = False
+    error: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        result = asdict(self)
+        result["links"] = [link.to_dict() for link in self.links]
+        return result
+
+
+

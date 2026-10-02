@@ -7,7 +7,7 @@ Currently provides:
 
 import logging
 from typing import TYPE_CHECKING, Any
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
 from pathlib import Path
 
 from app.browser.schema import (
@@ -19,6 +19,8 @@ from app.browser.schema import (
     BrowserScreenshotResult,
     BrowserScrollResult,
     BrowserGoBackResult,
+    BrowserLink,
+    BrowserLinksResult,
 )
 
 if TYPE_CHECKING:
@@ -594,6 +596,132 @@ def go_back(
             url=current_url,
             error=f"Go back action failed: {exc}",
         )
+
+
+def get_links(
+    page: "Page",
+    max_links: int = 100,
+    timeout_ms: int = 30000,
+) -> BrowserLinksResult:
+    """
+    Extract visible/usable links from the current page.
+
+    Validation rules:
+    - Browser/page must be available.
+    - max_links must be a positive integer.
+    - Ignore links without href, empty href, javascript:, mailto:, tel:, data:, file:.
+    - Deduplicate by absolute URL.
+    - Preserve DOM order.
+    - Prefer visible links.
+    - Do NOT navigate.
+
+    Returns:
+    - BrowserLinksResult with success, url, list of BrowserLink, truncated flag, error.
+    """
+    if page is None:
+        return BrowserLinksResult(
+            success=False,
+            url="",
+            links=[],
+            truncated=False,
+            error="No active Playwright page available.",
+        )
+
+    try:
+        current_url = page.url or ""
+    except Exception as exc:
+        return BrowserLinksResult(
+            success=False,
+            url="",
+            links=[],
+            truncated=False,
+            error=f"Failed to access page URL: {exc}",
+        )
+
+    if not isinstance(max_links, int) or max_links <= 0:
+        return BrowserLinksResult(
+            success=False,
+            url=current_url,
+            links=[],
+            truncated=False,
+            error="max_links must be a positive integer.",
+        )
+
+    try:
+        logger.info("Extracting links from page...")
+        
+        seen_urls = set()
+        links: list[BrowserLink] = []
+        truncated = False
+        
+        # We find all anchor tags. Playwright's locator.all() gets them in DOM order.
+        anchors = page.locator("a").all()
+        
+        for anchor in anchors:
+            # We want to break if we reach the limit, but we must set truncated=True
+            if len(links) >= max_links:
+                truncated = True
+                break
+                
+            # Prefer visible links
+            try:
+                if not anchor.is_visible(timeout=100):
+                    continue
+            except Exception:
+                continue
+
+            try:
+                href = anchor.get_attribute("href", timeout=100)
+                if not href:
+                    continue
+                href = href.strip()
+                if not href:
+                    continue
+                    
+                # Ignore non-http(s) protocols
+                if href.startswith(("javascript:", "mailto:", "tel:", "data:", "file:", "#")):
+                    continue
+                
+                # Resolve relative URL using Python's urljoin
+                abs_url = urljoin(current_url, href)
+                
+                # Double check parsing in case it ended up as something weird
+                parsed = urlparse(abs_url)
+                if parsed.scheme not in ("http", "https"):
+                    continue
+
+                if abs_url in seen_urls:
+                    continue
+                    
+                # Get visible text, whitespace normalized
+                text = anchor.inner_text(timeout=100) or ""
+                text = " ".join(text.split())
+                
+                seen_urls.add(abs_url)
+                links.append(BrowserLink(text=text, url=abs_url))
+                
+            except Exception:
+                # If an element goes stale or errors during extraction, ignore it
+                continue
+
+        logger.info("Successfully extracted %d links from '%s'", len(links), current_url)
+        return BrowserLinksResult(
+            success=True,
+            url=current_url,
+            links=links,
+            truncated=truncated,
+            error=None,
+        )
+    except Exception as exc:
+        logger.warning("Get links action failed: %s", exc)
+        return BrowserLinksResult(
+            success=False,
+            url=current_url,
+            links=[],
+            truncated=False,
+            error=f"Get links action failed: {exc}",
+        )
+
 
 
 
