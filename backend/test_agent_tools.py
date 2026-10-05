@@ -40,9 +40,13 @@ def run_tools_tests() -> bool:
     log.info("STEP 1 · Testing ToolRegistry initialization…")
     registry = ToolRegistry(manager)
     
-    # 1. Registry initializes with all 9 approved tools
+    # 1. Registry initializes with all 11 approved tools
     # 2. list_tools() returns expected tools
-    expected_tools = ["open_url", "get_page_text", "click", "fill", "press", "screenshot", "scroll", "go_back", "get_links"]
+    expected_tools = [
+        "open_url", "get_page_text", "click", "fill", "press",
+        "screenshot", "scroll", "go_back", "get_links",
+        "record_research_finding", "evaluate_item",  # added Task 2L and 2M
+    ]
     tools = registry.list_tools()
     if sorted(tools) != sorted(expected_tools):
         log.error("❌ FAILED: Missing tools or unexpected tools in registry: %s", tools)
@@ -84,9 +88,9 @@ def run_tools_tests() -> bool:
     # 9. get_tool_schemas() returns valid JSON-compatible data
     try:
         schemas = registry.get_tool_schemas()
-        json.dumps(schemas) # Test serialization
-        if len(schemas) != 9 or schemas[0]["name"] != "open_url":
-            log.error("❌ FAILED: get_tool_schemas() returned invalid data")
+        json.dumps(schemas)  # Test serialization
+        if len(schemas) != 11 or schemas[0]["name"] != "open_url":
+            log.error("❌ FAILED: get_tool_schemas() returned invalid data (got %d schemas)", len(schemas))
             all_passed = False
     except Exception as exc:
         log.error("❌ FAILED: get_tool_schemas() raised exception: %s", exc)
