@@ -4,7 +4,7 @@ Uses Pydantic for strong typing and serialization.
 """
 
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -55,6 +55,20 @@ class DiscoveredItem(BaseModel):
     status: str = "discovered"
 
 
+class EvaluationDecision(str, Enum):
+    """Structured relevance decision for an evaluated item."""
+    SELECTED = "selected"
+    REJECTED = "rejected"
+
+
+class ItemEvaluation(BaseModel):
+    """Structured relevance evaluation result for a discovered or researched item."""
+    item: str = Field(description="Short descriptive name or title of the item.")
+    url: str = Field(description="URL of the item being evaluated.")
+    decision: EvaluationDecision = Field(description="'selected' if the item is relevant; 'rejected' if not.")
+    reason: str = Field(description="Brief justification explaining the decision.")
+
+
 class ResearchFinding(BaseModel):
     """Structured information extracted during research."""
     title: str
@@ -88,6 +102,7 @@ class AgentState(BaseModel):
     rejected_items: List[RejectedItem] = Field(default_factory=list)
     selected_items: List[DiscoveredItem] = Field(default_factory=list)
     research_findings: List[ResearchFinding] = Field(default_factory=list)
+    evaluations: List[ItemEvaluation] = Field(default_factory=list)
     task_status: TaskStatus = TaskStatus.IDLE
     pending_approval: Optional[ApprovalRequest] = None
     verification_status: str = "not_started"

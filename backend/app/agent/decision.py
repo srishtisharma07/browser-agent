@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Any, Dict, Literal, Optional
 from pydantic import BaseModel, Field
 
-from app.agent.state import AgentState, Observation, TaskStatus
+from app.agent.state import AgentState, DiscoveredItem, EvaluationDecision, ItemEvaluation, Observation, RejectedItem, TaskStatus
 from app.agent.tools import ToolRegistry
 from app.llm.provider import LLMProvider, LLMResponse
 from app.safety.approval import ApprovalGate, is_consequential
@@ -51,8 +51,9 @@ def build_system_instruction() -> str:
         " - Understand the research goal and identify useful sources/pages.\n"
         " - Navigate using registered browser tools and inspect page content.\n"
         " - Extract relevant facts using the record_research_finding tool, and keep track of useful findings.\n"
+        " - After inspecting an item, use the evaluate_item tool to record whether it is 'selected' (relevant) or 'rejected' (not relevant), with a brief reason.\n"
         " - Avoid irrelevant pages and avoid repeatedly visiting the same page.\n"
-        " - Produce a concise final synthesis when complete.\n"
+        " - Produce a concise final synthesis when complete, summarising selected items and why rejected items were discarded.\n"
         "Rules:\n"
         "1. You must achieve the user's goal while respecting all constraints.\n"
         "2. Choose only from the supplied browser tools. Do NOT invent tool names or arguments.\n"
@@ -105,6 +106,11 @@ def build_decision_prompt(state: AgentState) -> str:
         f"- {f.title} ({f.url}): {f.summary}" for f in state.research_findings
     ) or "None"
 
+    evals_str = "\n".join(
+        f"- [{e.decision.value.upper()}] {e.item} ({e.url}): {e.reason}"
+        for e in state.evaluations
+    ) or "None"
+
     return (
         f"CURRENT TASK STATE:\n"
         f"Task ID: {state.task_id}\n"
@@ -119,6 +125,7 @@ def build_decision_prompt(state: AgentState) -> str:
         f"Discovered Items:\n{disc_str}\n\n"
         f"Rejected Items:\n{rej_str}\n\n"
         f"Research Findings:\n{findings_str}\n\n"
+        f"Item Evaluations (selected/rejected):\n{evals_str}\n\n"
         f"Recently Visited URLs:\n{visited_str}\n\n"
         f"Instructions: Based on the state above, decide whether to call ONE browser tool or provide a direct final response."
     )
@@ -284,7 +291,32 @@ class AgentDecisionEngine:
                     from app.agent.state import ResearchFinding
                     finding = ResearchFinding(**arguments)
                     new_state.research_findings.append(finding)
-                except Exception as e:
+                except Exception:
+                    pass
+
+            # Update structured state for item evaluations
+            if tool_name == "evaluate_item" and is_success:
+                try:
+                    evaluation = ItemEvaluation(**arguments)
+                    new_state.evaluations.append(evaluation)
+                    # Mirror into legacy selected_items / rejected_items for backward compat
+                    if evaluation.decision == EvaluationDecision.SELECTED:
+                        new_state.selected_items.append(
+                            DiscoveredItem(
+                                title=evaluation.item,
+                                url=evaluation.url,
+                                status="selected",
+                            )
+                        )
+                    else:
+                        new_state.rejected_items.append(
+                            RejectedItem(
+                                title=evaluation.item,
+                                url=evaluation.url,
+                                reason=evaluation.reason,
+                            )
+                        )
+                except Exception:
                     pass
 
             new_state.observations.append(Observation(

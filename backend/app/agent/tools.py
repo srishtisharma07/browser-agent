@@ -56,6 +56,15 @@ class RecordResearchFindingInput(BaseModel):
     source: str = Field(default="browser", description="Source type of this finding.")
 
 
+class EvaluateItemInput(BaseModel):
+    item: str = Field(description="Short descriptive name or title of the item being evaluated.")
+    url: str = Field(description="URL of the item being evaluated.")
+    decision: Literal["selected", "rejected"] = Field(
+        description="'selected' if the item is relevant and should be kept; 'rejected' if it should be discarded."
+    )
+    reason: str = Field(description="Brief justification explaining why the item was selected or rejected.")
+
+
 # --- Tool Definition ---
 
 class ToolDefinition:
@@ -202,4 +211,14 @@ class ToolRegistry:
             description="Record structured research findings into the agent state.",
             input_model=RecordResearchFindingInput,
             executor=lambda **kwargs: {"success": True, "finding": kwargs}
+        ))
+        self.register(ToolDefinition(
+            name="evaluate_item",
+            description=(
+                "Evaluate the relevance of a discovered or researched item. "
+                "Use 'selected' if the item matches the research goal and constraints; "
+                "use 'rejected' if it does not. Provide a brief reason."
+            ),
+            input_model=EvaluateItemInput,
+            executor=lambda **kwargs: {"success": True, "evaluation": kwargs}
         ))
