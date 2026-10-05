@@ -55,6 +55,15 @@ class DiscoveredItem(BaseModel):
     status: str = "discovered"
 
 
+class ResearchFinding(BaseModel):
+    """Structured information extracted during research."""
+    title: str
+    url: str
+    summary: str
+    key_points: List[str] = Field(default_factory=list)
+    source: str = "browser"
+
+
 class ApprovalRequest(BaseModel):
     """A request for human-in-the-loop approval."""
     action: str
@@ -78,6 +87,7 @@ class AgentState(BaseModel):
     discovered_items: List[DiscoveredItem] = Field(default_factory=list)
     rejected_items: List[RejectedItem] = Field(default_factory=list)
     selected_items: List[DiscoveredItem] = Field(default_factory=list)
+    research_findings: List[ResearchFinding] = Field(default_factory=list)
     task_status: TaskStatus = TaskStatus.IDLE
     pending_approval: Optional[ApprovalRequest] = None
     verification_status: str = "not_started"

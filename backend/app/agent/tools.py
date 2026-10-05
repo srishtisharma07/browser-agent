@@ -48,6 +48,13 @@ class GetLinksInput(BaseModel):
     max_links: int = Field(default=100, description="Maximum number of links to extract.")
     timeout_ms: int = Field(default=30000, description="Timeout in milliseconds.")
 
+class RecordResearchFindingInput(BaseModel):
+    title: str = Field(description="Short title of the finding.")
+    url: str = Field(description="URL of the source page.")
+    summary: str = Field(description="Concise summary of the extracted information.")
+    key_points: List[str] = Field(default_factory=list, description="Key factual points extracted.")
+    source: str = Field(default="browser", description="Source type of this finding.")
+
 
 # --- Tool Definition ---
 
@@ -189,4 +196,10 @@ class ToolRegistry:
             description="Extract structured links from the current page.",
             input_model=GetLinksInput,
             executor=self._manager.get_links
+        ))
+        self.register(ToolDefinition(
+            name="record_research_finding",
+            description="Record structured research findings into the agent state.",
+            input_model=RecordResearchFindingInput,
+            executor=lambda **kwargs: {"success": True, "finding": kwargs}
         ))

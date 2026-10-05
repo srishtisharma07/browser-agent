@@ -71,8 +71,9 @@ log = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 SMOKE_TEST_GOAL = (
-    "Open https://example.com/, inspect the page, "
-    "gather the main information available on it, and give me a short summary."
+    "Research https://example.com/ and any useful linked information "
+    "available from that page. Give me a concise evidence-based summary "
+    "and include the source URLs."
 )
 MAX_CYCLES = 8
 

@@ -47,13 +47,20 @@ def build_system_instruction() -> str:
     """Returns system instruction prompt guiding the LLM as a browser control agent."""
     return (
         "You are an AI Browser Agent controlling a web browser via predefined tools.\n"
+        "For research tasks, you should:\n"
+        " - Understand the research goal and identify useful sources/pages.\n"
+        " - Navigate using registered browser tools and inspect page content.\n"
+        " - Extract relevant facts using the record_research_finding tool, and keep track of useful findings.\n"
+        " - Avoid irrelevant pages and avoid repeatedly visiting the same page.\n"
+        " - Produce a concise final synthesis when complete.\n"
         "Rules:\n"
         "1. You must achieve the user's goal while respecting all constraints.\n"
         "2. Choose only from the supplied browser tools. Do NOT invent tool names or arguments.\n"
         "3. Request at most ONE tool call per step.\n"
         "4. If you have enough information to answer or if no further browser action is needed, provide a clear direct text response without requesting any tool.\n"
         "5. Do NOT invent browser observations or claim success without evidence.\n"
-        "6. Do NOT output code, script, Python commands, or shell instructions."
+        "6. Do not claim that information was found unless it came from an observed browser page or another provided observation.\n"
+        "7. Do NOT output code, script, Python commands, or shell instructions."
     )
 
 
@@ -86,6 +93,18 @@ def build_decision_prompt(state: AgentState) -> str:
     recent_errors = state.errors[-3:] if state.errors else []
     errors_str = "\n".join(f"- {e}" for e in recent_errors) or "None"
 
+    visited_urls = []
+    for obs in state.observations:
+        if obs.source == "tool:open_url" and obs.metadata.get("success"):
+            url = obs.metadata.get("arguments", {}).get("url")
+            if url and url not in visited_urls:
+                visited_urls.append(url)
+    visited_str = "\n".join(f"- {u}" for u in visited_urls[-10:]) or "None"
+
+    findings_str = "\n".join(
+        f"- {f.title} ({f.url}): {f.summary}" for f in state.research_findings
+    ) or "None"
+
     return (
         f"CURRENT TASK STATE:\n"
         f"Task ID: {state.task_id}\n"
@@ -99,6 +118,8 @@ def build_decision_prompt(state: AgentState) -> str:
         f"Recent Errors (use these to choose a recovery action if needed):\n{errors_str}\n\n"
         f"Discovered Items:\n{disc_str}\n\n"
         f"Rejected Items:\n{rej_str}\n\n"
+        f"Research Findings:\n{findings_str}\n\n"
+        f"Recently Visited URLs:\n{visited_str}\n\n"
         f"Instructions: Based on the state above, decide whether to call ONE browser tool or provide a direct final response."
     )
 
@@ -257,6 +278,14 @@ class AgentDecisionEngine:
                     except TypeError:
                         pass
 
+            # Update structured state for research findings directly
+            if tool_name == "record_research_finding" and is_success:
+                try:
+                    from app.agent.state import ResearchFinding
+                    finding = ResearchFinding(**arguments)
+                    new_state.research_findings.append(finding)
+                except Exception as e:
+                    pass
 
             new_state.observations.append(Observation(
                 source=f"tool:{tool_name}",
