@@ -219,10 +219,10 @@ def run_smoke_test() -> bool:
         log.error("Smoke test raised an exception: %s", sanitized)
     finally:
         try:
-            browser_manager.stop()
-            log.info("BrowserManager stopped cleanly.")
+            browser_manager.close()
+            log.info("BrowserManager closed cleanly.")
         except Exception as exc:
-            log.warning("Error stopping BrowserManager: %s", _sanitize(str(exc), api_key))
+            log.warning("Error closing BrowserManager: %s", _sanitize(str(exc), api_key))
 
     # ------------------------------------------------------------------
     # Step 4: Print safe results
