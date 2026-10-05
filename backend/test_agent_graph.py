@@ -137,6 +137,9 @@ def run_agent_graph_tests() -> bool:
         elif res2.stop_reason != "completed_response":
             log.error("❌ FAILED: Expected stop_reason 'completed_response', got '%s'", res2.stop_reason)
             all_passed = False
+        elif res2.final_state.task_status != TaskStatus.COMPLETED:
+            log.error("❌ FAILED: Expected task_status 'COMPLETED', got '%s'", res2.final_state.task_status.value)
+            all_passed = False
         elif mock_browser_mgr.method_calls:
             log.error("❌ FAILED: Browser manager was called during text response path")
             all_passed = False
@@ -169,6 +172,9 @@ def run_agent_graph_tests() -> bool:
             all_passed = False
         elif res3.verification_status != "response_success":
             log.error("❌ FAILED: Expected final verification_status 'response_success', got '%s'", res3.verification_status)
+            all_passed = False
+        elif res3.final_state.task_status != TaskStatus.COMPLETED:
+            log.error("❌ FAILED: Expected final task_status 'COMPLETED', got '%s'", res3.final_state.task_status.value)
             all_passed = False
         elif not mock_browser_mgr.open_url.called:
             log.error("❌ FAILED: BrowserManager.open_url was not called")
@@ -312,6 +318,9 @@ def run_agent_graph_tests() -> bool:
             all_passed = False
         elif res9.stop_reason != "completed_response":
             log.error("❌ FAILED: Expected stop_reason 'completed_response', got '%s'", res9.stop_reason)
+            all_passed = False
+        elif res9.final_state.task_status != TaskStatus.COMPLETED:
+            log.error("❌ FAILED: Expected task_status 'COMPLETED', got '%s'", res9.final_state.task_status.value)
             all_passed = False
         elif len(res9.final_state.observations) != 3:
             log.error("❌ FAILED: Expected 3 accumulated observations in state, got %d", len(res9.final_state.observations))

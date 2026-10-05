@@ -160,6 +160,7 @@ def create_agent_graph(
             stop_reason = "task_stopped"
         elif decision_res and decision_res.action == "respond":
             stop_reason = "completed_response"
+            updated_agent_st.task_status = TaskStatus.COMPLETED
         elif len(history) >= 3 and history[-1] == history[-2] == history[-3] and history[-1] != "action:respond":
             err_msg = "Loop protection triggered: 3 consecutive identical tool calls detected."
             updated_agent_st.errors.append(err_msg)

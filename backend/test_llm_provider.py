@@ -154,40 +154,91 @@ def run_llm_provider_tests() -> bool:
         except ValueError:
             log.info("✔ Provider correctly rejected empty prompt.")
 
-        # 8. Test text response generation
+        # --- Case A: Normal text ---
+        log.info("  Case A: Normal text ...")
         mock_text_resp = MagicMock()
-        mock_text_resp.text = "Navigation complete."
-        mock_text_resp.function_calls = None
-        mock_text_resp.candidates = []
+        mock_text_resp.candidates = [MagicMock()]
+        mock_text_resp.candidates[0].content.parts = [MagicMock()]
+        mock_text_resp.candidates[0].content.parts[0].function_call = None
+        mock_text_resp.candidates[0].content.parts[0].text = "Navigation complete."
         mock_client.models.generate_content.return_value = mock_text_resp
-
+        
         res = provider.generate("Navigate to google.com")
         if res.text != "Navigation complete." or res.has_tool_calls or res.error:
-            log.error("❌ FAILED: Text generation failed, got: %s", res)
+            log.error("❌ FAILED: Case A - Text generation failed, got: %s", res)
             all_passed = False
         else:
-            log.info("✔ Text generation PASSED!")
+            log.info("✔ Case A PASSED!")
 
-        # 9. Test tool call response generation
-        mock_tool_call = MagicMock()
-        mock_tool_call.name = "open_url"
-        mock_tool_call.args = {"url": "https://google.com"}
-
+        # --- Case B: One function call ---
+        log.info("  Case B: One function call ...")
+        mock_fn_call = MagicMock()
+        mock_fn_call.name = "open_url"
+        mock_fn_call.args = {"url": "https://google.com"}
+        
         mock_tool_resp = MagicMock()
-        mock_tool_resp.text = None
-        mock_tool_resp.function_calls = [mock_tool_call]
-        mock_tool_resp.candidates = []
+        mock_tool_resp.candidates = [MagicMock()]
+        mock_tool_resp.candidates[0].content.parts = [MagicMock()]
+        mock_tool_resp.candidates[0].content.parts[0].function_call = mock_fn_call
+        mock_tool_resp.candidates[0].content.parts[0].text = None
         mock_client.models.generate_content.return_value = mock_tool_resp
 
         res_tool = provider.generate("Open google.com")
         if not res_tool.has_tool_calls or res_tool.tool_calls[0].name != "open_url":
-            log.error("❌ FAILED: Tool call parsing failed, got: %s", res_tool)
+            log.error("❌ FAILED: Case B - Tool call parsing failed, got: %s", res_tool)
             all_passed = False
         elif res_tool.tool_calls[0].arguments.get("url") != "https://google.com":
-            log.error("❌ FAILED: Tool call argument parsing failed, got: %s", res_tool.tool_calls[0].arguments)
+            log.error("❌ FAILED: Case B - Tool call argument parsing failed, got: %s", res_tool.tool_calls[0].arguments)
+            all_passed = False
+        elif res_tool.text is not None:
+            log.error("❌ FAILED: Case B - Text should be None, got: %s", res_tool.text)
             all_passed = False
         else:
-            log.info("✔ Tool call generation PASSED!")
+            log.info("✔ Case B PASSED!")
+
+        # --- Case C: Text + function call ---
+        log.info("  Case C: Text + function call ...")
+        mock_text_part = MagicMock()
+        mock_text_part.function_call = None
+        mock_text_part.text = "I will open the URL now."
+        
+        mock_tool_part = MagicMock()
+        mock_tool_part.function_call = mock_fn_call
+        mock_tool_part.text = None
+        
+        mock_mixed_resp = MagicMock()
+        mock_mixed_resp.candidates = [MagicMock()]
+        mock_mixed_resp.candidates[0].content.parts = [mock_text_part, mock_tool_part]
+        mock_client.models.generate_content.return_value = mock_mixed_resp
+        
+        res_mixed = provider.generate("Open google.com")
+        if not res_mixed.has_tool_calls or res_mixed.tool_calls[0].name != "open_url":
+            log.error("❌ FAILED: Case C - Tool call parsing failed, got: %s", res_mixed)
+            all_passed = False
+        elif res_mixed.text != "I will open the URL now.":
+            log.error("❌ FAILED: Case C - Text parsing failed, got: %s", res_mixed.text)
+            all_passed = False
+        else:
+            log.info("✔ Case C PASSED!")
+            
+        # --- Case D: Malformed / unexpected response ---
+        log.info("  Case D: Malformed/unexpected response ...")
+        mock_malformed = MagicMock()
+        mock_malformed.candidates = None
+        mock_malformed.function_calls = None
+        mock_malformed.text = None
+        mock_client.models.generate_content.return_value = mock_malformed
+        
+        try:
+            res_malf = provider.generate("Open google.com")
+            if res_malf.text is not None or res_malf.has_tool_calls:
+                log.error("❌ FAILED: Case D - Should handle gracefully, got: %s", res_malf)
+                all_passed = False
+            else:
+                log.info("✔ Case D PASSED!")
+        except Exception as exc:
+            log.error("❌ FAILED: Case D - Crashed on malformed response: %s", exc)
+            all_passed = False
 
         # 10. Test tool schema integration with ToolRegistry
         mgr = BrowserManager()

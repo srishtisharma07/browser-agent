@@ -112,43 +112,53 @@ class GeminiLLMProvider(LLMProvider):
                     contents=prompt,
                 )
 
-            # Parse text response
             text = None
-            try:
-                text = response.text
-            except Exception:
-                text = None
-
-            # Parse tool / function calls
             tool_calls: List[LLMToolCall] = []
+            text_parts = []
 
-            # Method 1: Check top-level response.function_calls if present
-            raw_function_calls = getattr(response, "function_calls", None)
-            if raw_function_calls:
-                for fn_call in raw_function_calls:
-                    name = getattr(fn_call, "name", None)
-                    args = getattr(fn_call, "args", {})
-                    if name:
-                        tool_calls.append(LLMToolCall(
-                            name=name,
-                            arguments=dict(args) if isinstance(args, dict) else args
-                        ))
+            # Method 1: Check candidate content parts directly
+            if hasattr(response, "candidates") and response.candidates:
+                # Use the first candidate
+                candidate = response.candidates[0]
+                content = getattr(candidate, "content", None)
+                if content and hasattr(content, "parts") and content.parts:
+                    for part in content.parts:
+                        fn_call = getattr(part, "function_call", None)
+                        if fn_call:
+                            name = getattr(fn_call, "name", None)
+                            args = getattr(fn_call, "args", {})
+                            if name:
+                                tool_calls.append(LLMToolCall(
+                                    name=name,
+                                    arguments=dict(args) if isinstance(args, dict) else args
+                                ))
+                        else:
+                            part_text = getattr(part, "text", None)
+                            if part_text:
+                                text_parts.append(part_text)
             
-            # Method 2: Check candidate content parts if function_calls was empty
-            if not tool_calls and hasattr(response, "candidates") and response.candidates:
-                for candidate in response.candidates:
-                    content = getattr(candidate, "content", None)
-                    if content and hasattr(content, "parts") and content.parts:
-                        for part in content.parts:
-                            fn_call = getattr(part, "function_call", None)
-                            if fn_call:
-                                name = getattr(fn_call, "name", None)
-                                args = getattr(fn_call, "args", {})
-                                if name:
-                                    tool_calls.append(LLMToolCall(
-                                        name=name,
-                                        arguments=dict(args) if isinstance(args, dict) else args
-                                    ))
+            if text_parts:
+                text = "".join(text_parts)
+
+            # Method 2: Check top-level response.function_calls if present
+            if not tool_calls:
+                raw_function_calls = getattr(response, "function_calls", None)
+                if raw_function_calls:
+                    for fn_call in raw_function_calls:
+                        name = getattr(fn_call, "name", None)
+                        args = getattr(fn_call, "args", {})
+                        if name:
+                            tool_calls.append(LLMToolCall(
+                                name=name,
+                                arguments=dict(args) if isinstance(args, dict) else args
+                            ))
+            
+            # Method 3: Fallback text parsing if nothing was found manually
+            if not text and not tool_calls:
+                try:
+                    text = getattr(response, "text", None)
+                except Exception:
+                    pass
 
             return LLMResponse(
                 text=text,
