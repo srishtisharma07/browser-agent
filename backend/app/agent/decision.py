@@ -8,7 +8,10 @@ from datetime import datetime
 from typing import Any, Dict, Literal, Optional
 from pydantic import BaseModel, Field
 
-from app.agent.state import AgentState, DiscoveredItem, EvaluationDecision, ItemEvaluation, Observation, RejectedItem, TaskStatus
+from app.agent.state import (
+    AgentState, ApplicationDraft, DiscoveredItem, DraftStatus,
+    EvaluationDecision, ItemEvaluation, Observation, RejectedItem, TaskStatus,
+)
 from app.agent.tools import ToolRegistry
 from app.llm.provider import LLMProvider, LLMResponse
 from app.safety.approval import ApprovalGate, is_consequential
@@ -54,6 +57,12 @@ def build_system_instruction() -> str:
         " - After inspecting an item, use the evaluate_item tool to record whether it is 'selected' (relevant) or 'rejected' (not relevant), with a brief reason.\n"
         " - Avoid irrelevant pages and avoid repeatedly visiting the same page.\n"
         " - Produce a concise final synthesis when complete, summarising selected items and why rejected items were discarded.\n"
+        "For application preparation tasks, you must:\n"
+        " - Only call prepare_application for an item that has already been evaluated and selected.\n"
+        " - Never call prepare_application for a rejected or unevaluated item.\n"
+        " - Preparing an application is NOT the same as submitting it.\n"
+        " - Never submit an application without explicit human approval via the approval gate.\n"
+        " - Never claim that an application was submitted unless a verified submission action actually occurred.\n"
         "Rules:\n"
         "1. You must achieve the user's goal while respecting all constraints.\n"
         "2. Choose only from the supplied browser tools. Do NOT invent tool names or arguments.\n"
@@ -111,6 +120,11 @@ def build_decision_prompt(state: AgentState) -> str:
         for e in state.evaluations
     ) or "None"
 
+    drafts_str = "\n".join(
+        f"- [{d.status.value.upper()}] {d.item_title} ({d.item_url})"
+        for d in state.application_drafts
+    ) or "None"
+
     return (
         f"CURRENT TASK STATE:\n"
         f"Task ID: {state.task_id}\n"
@@ -126,6 +140,7 @@ def build_decision_prompt(state: AgentState) -> str:
         f"Rejected Items:\n{rej_str}\n\n"
         f"Research Findings:\n{findings_str}\n\n"
         f"Item Evaluations (selected/rejected):\n{evals_str}\n\n"
+        f"Application Drafts (prepared, NOT submitted):\n{drafts_str}\n\n"
         f"Recently Visited URLs:\n{visited_str}\n\n"
         f"Instructions: Based on the state above, decide whether to call ONE browser tool or provide a direct final response."
     )
@@ -318,6 +333,63 @@ class AgentDecisionEngine:
                         )
                 except Exception:
                     pass
+
+            # Update structured state for application drafts
+            if tool_name == "prepare_application" and is_success:
+                item_url = arguments.get("item_url", "")
+                item_title = arguments.get("item_title", "")
+
+                # --- Selection dependency check ---
+                # The item must have been previously evaluated and selected.
+                # Compare by URL first; fall back to title substring match.
+                selected_urls = {e.url for e in new_state.evaluations if e.decision == EvaluationDecision.SELECTED}
+                selected_urls |= {i.url for i in new_state.selected_items}
+                is_item_selected = (
+                    item_url in selected_urls
+                    or any(item_title.lower() in e.item.lower() for e in new_state.evaluations if e.decision == EvaluationDecision.SELECTED)
+                )
+
+                if not is_item_selected:
+                    # Structured failure — block the draft, record an error
+                    err_msg = (
+                        f"prepare_application blocked: item '{item_title}' ({item_url}) "
+                        "has not been evaluated and selected. Evaluate and select the item first."
+                    )
+                    new_state.errors.append(err_msg)
+                    new_state.observations.append(Observation(
+                        source="decision_engine",
+                        summary=err_msg,
+                        timestamp=timestamp,
+                    ))
+                    # Overwrite the summary/is_success so the outer observation reflects failure
+                    summary = err_msg
+                    is_success = False
+                else:
+                    try:
+                        draft = ApplicationDraft(
+                            item_title=item_title,
+                            item_url=item_url,
+                            status=DraftStatus.READY_FOR_REVIEW,
+                            matched_requirements=arguments.get("matched_requirements", []),
+                            missing_requirements=arguments.get("missing_requirements", []),
+                            notes=arguments.get("notes", ""),
+                        )
+                        new_state.application_drafts.append(draft)
+                        summary = (
+                            f"Application draft for '{item_title}' created and marked ready_for_review. "
+                            "Explicit human approval is required before any submission."
+                        )
+                        new_state.observations.append(Observation(
+                            source="decision_engine",
+                            summary=summary,
+                            url=item_url,
+                            timestamp=timestamp,
+                            metadata={"draft_status": DraftStatus.READY_FOR_REVIEW.value, "item_url": item_url},
+                        ))
+                    except Exception as exc:
+                        err_msg = f"prepare_application failed to create draft: {exc}"
+                        new_state.errors.append(err_msg)
+                        is_success = False
 
             new_state.observations.append(Observation(
                 source=f"tool:{tool_name}",

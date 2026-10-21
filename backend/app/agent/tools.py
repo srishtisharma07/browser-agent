@@ -5,7 +5,7 @@ Acts as a security and execution boundary between the LLM and the browser.
 
 import json
 from typing import Any, Callable, Dict, List, Literal, Optional
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from app.browser.manager import BrowserManager
 
@@ -63,6 +63,41 @@ class EvaluateItemInput(BaseModel):
         description="'selected' if the item is relevant and should be kept; 'rejected' if it should be discarded."
     )
     reason: str = Field(description="Brief justification explaining why the item was selected or rejected.")
+
+
+class PrepareApplicationInput(BaseModel):
+    """Input schema for the prepare_application tool.
+
+    This tool creates a structured preparation record ONLY.
+    It does NOT submit, send, purchase, or perform any consequential browser action.
+    It may only be used after the target item has been evaluated and selected.
+    """
+    item_title: str = Field(description="Title of the item for which the application is being prepared.")
+    item_url: str = Field(description="URL of the selected item.")
+    matched_requirements: List[str] = Field(
+        default_factory=list,
+        description="Requirements or criteria that are already met.",
+    )
+    missing_requirements: List[str] = Field(
+        default_factory=list,
+        description="Requirements or criteria that are not yet met or need clarification.",
+    )
+    notes: str = Field(
+        default="",
+        description="Additional preparation notes or context.",
+    )
+
+    @field_validator("item_title")
+    def validate_item_title(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("item_title cannot be empty")
+        return v
+
+    @field_validator("item_url")
+    def validate_item_url(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("item_url cannot be empty")
+        return v
 
 
 # --- Tool Definition ---
@@ -221,4 +256,16 @@ class ToolRegistry:
             ),
             input_model=EvaluateItemInput,
             executor=lambda **kwargs: {"success": True, "evaluation": kwargs}
+        ))
+        self.register(ToolDefinition(
+            name="prepare_application",
+            description=(
+                "Create a structured application-preparation record for a previously SELECTED item. "
+                "This tool ONLY prepares a draft — it does NOT submit, send, purchase, or perform "
+                "any consequential action. Only call this tool for items that have already been "
+                "evaluated and selected. The draft will be marked ready_for_review and must receive "
+                "explicit human approval before any submission can occur."
+            ),
+            input_model=PrepareApplicationInput,
+            executor=lambda **kwargs: {"success": True, "draft": kwargs},
         ))

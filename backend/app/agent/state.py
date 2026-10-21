@@ -78,6 +78,52 @@ class ResearchFinding(BaseModel):
     source: str = "browser"
 
 
+class DraftStatus(str, Enum):
+    """Lifecycle status of an application draft."""
+    DRAFT = "draft"
+    READY_FOR_REVIEW = "ready_for_review"
+
+
+class ApplicationDraft(BaseModel):
+    """
+    A structured application-preparation record.
+    Represents a prepared (but NOT submitted) application for a selected item.
+    """
+    item_title: str = Field(description="Title of the item for which the application is prepared.")
+    item_url: str = Field(description="URL of the item.")
+    status: DraftStatus = Field(
+        default=DraftStatus.DRAFT,
+        description="Current lifecycle status of the draft.",
+    )
+    matched_requirements: List[str] = Field(
+        default_factory=list,
+        description="Requirements or criteria that the applicant already meets.",
+    )
+    missing_requirements: List[str] = Field(
+        default_factory=list,
+        description="Requirements or criteria that are not yet met or need clarification.",
+    )
+    notes: str = Field(
+        default="",
+        description="Additional preparation notes or context about the application.",
+    )
+
+    @field_validator("item_title")
+    def validate_item_title(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("item_title cannot be empty")
+        return v
+
+    @field_validator("item_url")
+    def validate_item_url(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("item_url cannot be empty")
+        lower = v.strip().lower()
+        if not (lower.startswith("http://") or lower.startswith("https://")):
+            raise ValueError("item_url must be an HTTP or HTTPS URL")
+        return v
+
+
 class ApprovalRequest(BaseModel):
     """A request for human-in-the-loop approval."""
     action: str
@@ -103,6 +149,7 @@ class AgentState(BaseModel):
     selected_items: List[DiscoveredItem] = Field(default_factory=list)
     research_findings: List[ResearchFinding] = Field(default_factory=list)
     evaluations: List[ItemEvaluation] = Field(default_factory=list)
+    application_drafts: List[ApplicationDraft] = Field(default_factory=list)
     task_status: TaskStatus = TaskStatus.IDLE
     pending_approval: Optional[ApprovalRequest] = None
     verification_status: str = "not_started"
