@@ -5,7 +5,7 @@ Provides a clean, high-level entry point to execute autonomous browser research 
 
 import uuid
 import logging
-from typing import List, Optional
+from typing import Callable, List, Optional
 from pydantic import BaseModel, Field
 
 from app.agent.state import AgentState, Constraint, TaskStatus
@@ -47,6 +47,7 @@ class AgentRunner:
         task_id: Optional[str] = None,
         max_cycles: int = 5,
         constraints: Optional[List[Constraint]] = None,
+        on_state_update: Optional[Callable[[AgentState], None]] = None,
     ) -> AgentGraphResult:
         """
         Execute an autonomous research task for a user goal.
@@ -56,6 +57,7 @@ class AgentRunner:
             task_id: Optional unique task identifier (generated if omitted).
             max_cycles: Maximum allowed decision cycles (default: 5).
             constraints: Optional initial constraints list.
+            on_state_update: Optional callback invoked with updated AgentState at each step.
 
         Returns:
             AgentGraphResult containing final AgentState, last decision, verification status, and cycle metrics.
@@ -94,16 +96,25 @@ class AgentRunner:
 
                 engine = AgentDecisionEngine(tool_registry=registry, llm_provider=provider)
 
-            graph = create_agent_graph(decision_engine=engine, max_cycles=max_cycles)
-            result = run_agent_graph(graph, initial_state=initial_state, max_cycles=max_cycles)
+            graph = create_agent_graph(
+                decision_engine=engine,
+                max_cycles=max_cycles,
+                on_state_update=on_state_update,
+            )
+            result = run_agent_graph(
+                graph,
+                initial_state=initial_state,
+                max_cycles=max_cycles,
+                on_state_update=on_state_update,
+            )
             return result
 
         finally:
             if own_browser_manager:
                 try:
-                    own_browser_manager.stop()
+                    own_browser_manager.close()
                 except Exception as e:
-                    logger.warning("Error stopping auto-created BrowserManager: %s", e)
+                    logger.warning("Error closing auto-created BrowserManager: %s", e)
 
 
 def run_agent_task(
@@ -113,6 +124,7 @@ def run_agent_task(
     tool_registry: Optional[ToolRegistry] = None,
     llm_provider: Optional[LLMProvider] = None,
     browser_manager: Optional[BrowserManager] = None,
+    on_state_update: Optional[Callable[[AgentState], None]] = None,
 ) -> AgentGraphResult:
     """
     Convenience function for executing an autonomous agent task.
@@ -122,4 +134,9 @@ def run_agent_task(
         llm_provider=llm_provider,
         browser_manager=browser_manager,
     )
-    return runner.run_task(user_goal=user_goal, task_id=task_id, max_cycles=max_cycles)
+    return runner.run_task(
+        user_goal=user_goal,
+        task_id=task_id,
+        max_cycles=max_cycles,
+        on_state_update=on_state_update,
+    )

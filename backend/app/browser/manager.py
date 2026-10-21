@@ -139,6 +139,12 @@ class BrowserManager:
         with self._lock:
             self._close_unlocked()
 
+    def stop(self) -> None:
+        """
+        Alias for close() to ensure compatibility with all runners and lifecycles.
+        """
+        self.close()
+
     def open_url(self, url: str, timeout_ms: int = 30000) -> BrowserActionResult:
         """
         Navigate the active browser page to the specified HTTP/HTTPS URL.

@@ -5,7 +5,7 @@ Orchestrates a bounded autonomous decision-execution-verification loop using Lan
 
 import json
 from datetime import datetime
-from typing import Any, Dict, List, Optional, TypedDict
+from typing import Any, Callable, Dict, List, Optional, TypedDict
 from pydantic import BaseModel, Field
 from langgraph.graph import StateGraph, START, END
 
@@ -45,6 +45,7 @@ def create_agent_graph(
     tool_registry: Optional[ToolRegistry] = None,
     llm_provider: Optional[LLMProvider] = None,
     max_cycles: int = 5,
+    on_state_update: Optional[Callable[[AgentState], None]] = None,
 ) -> Any:
     """
     Factory function that builds and compiles a LangGraph StateGraph instance.
@@ -84,6 +85,13 @@ def create_agent_graph(
         history = list(state.get("action_history", []))
 
         decision_res = engine.execute_cycle(current_agent_state)
+
+        # Notify callback of live state update
+        if on_state_update is not None:
+            try:
+                on_state_update(decision_res.updated_state)
+            except Exception:
+                pass
 
         # Track action signature for loop detection
         if decision_res.action == "tool_call" and decision_res.tool_name:
@@ -175,6 +183,13 @@ def create_agent_graph(
         elif cycle_count >= limit:
             stop_reason = "max_cycles_reached"
 
+        # Notify callback of live state update after verification
+        if on_state_update is not None:
+            try:
+                on_state_update(updated_agent_st)
+            except Exception:
+                pass
+
         return {
             "agent_state": updated_agent_st,
             "verification_status": status,
@@ -221,6 +236,7 @@ def run_agent_graph(
     graph: Any,
     initial_state: AgentState,
     max_cycles: int = 5,
+    on_state_update: Optional[Callable[[AgentState], None]] = None,
 ) -> AgentGraphResult:
     """
     Helper function to invoke a compiled LangGraph instance with an initial AgentState.
