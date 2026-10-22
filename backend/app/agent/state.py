@@ -180,6 +180,8 @@ class ApprovalRequest(BaseModel):
     action: str
     description: str
     target: Optional[str] = None
+    arguments: Dict[str, Any] = Field(default_factory=dict, description="Saved arguments for the exact pending action.")
+    request_id: Optional[str] = Field(default=None, description="Unique identifier for the pending approval request.")
     required: bool = True
 
 

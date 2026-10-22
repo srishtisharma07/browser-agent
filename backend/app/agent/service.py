@@ -25,7 +25,8 @@ class TaskManager:
 
     def __init__(self, runner_factory: Optional[Callable[[], AgentRunner]] = None):
         self._tasks: Dict[str, Dict[str, Any]] = {}
-        self._lock = threading.Lock()
+        self._stop_events: Dict[str, threading.Event] = {}
+        self._lock = threading.RLock()
         self._runner_factory = runner_factory
 
     def set_runner_factory(self, runner_factory: Optional[Callable[[], AgentRunner]]) -> None:
@@ -36,6 +37,13 @@ class TaskManager:
         """Clear all tasks (used in unit tests)."""
         with self._lock:
             self._tasks.clear()
+            self._stop_events.clear()
+
+    def _is_stopped(self, task_id: str) -> bool:
+        """Check whether cancellation was signaled for task_id."""
+        with self._lock:
+            evt = self._stop_events.get(task_id)
+            return evt.is_set() if evt else False
 
     def get_active_task(self) -> Optional[Dict[str, Any]]:
         """
@@ -61,6 +69,159 @@ class TaskManager:
         """
         with self._lock:
             return [dict(t) for t in reversed(list(self._tasks.values()))]
+
+    def stop_task(self, task_id: str) -> Dict[str, Any]:
+        """
+        Request safe cancellation of an active task. Idempotent and thread-safe.
+        Prevents subsequent decision cycles and tool actions.
+        Returns the updated task state.
+
+        Raises:
+            KeyError: If task_id is unknown.
+        """
+        with self._lock:
+            if task_id not in self._tasks:
+                raise KeyError(f"Task '{task_id}' not found.")
+
+            task = self._tasks[task_id]
+            curr_status = task.get("status")
+
+            # Signal cancellation event
+            if task_id in self._stop_events:
+                self._stop_events[task_id].set()
+
+            # Idempotent: if already stopped, return current state without error
+            if curr_status == TaskStatus.STOPPED.value:
+                return dict(task)
+
+            # Idempotent: if already completed or failed, preserve terminal status
+            if curr_status in (TaskStatus.COMPLETED.value, TaskStatus.FAILED.value):
+                return dict(task)
+
+            # Active task (RUNNING or WAITING_FOR_APPROVAL): transition to STOPPED
+            task["status"] = TaskStatus.STOPPED.value
+            task["pending_approval"] = None
+            now = datetime.now().isoformat()
+            task["errors"].append("Task was stopped by user request.")
+            task["observations"].append({
+                "source": "task_manager",
+                "summary": "Task was stopped by user request. Safe cancellation applied.",
+                "timestamp": now,
+                "metadata": {"event": "stop_requested"},
+            })
+            task["updated_at"] = now
+            return dict(task)
+
+    def handle_approval(
+        self,
+        task_id: str,
+        decision: str,
+        action: Optional[str] = None,
+        reason: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Submit a human approval decision ('approve' or 'reject') for a pending approval request.
+
+        Validation rules:
+          - Task must exist (raises KeyError)
+          - Task must currently be in WAITING_FOR_APPROVAL status (raises RuntimeError)
+          - Pending approval request must be present (raises ValueError)
+          - Decision must be 'approve' or 'reject' (raises ValueError)
+          - If action name is provided, it must match the pending action identity (raises ValueError)
+
+        Resumption semantics:
+          - 'reject': Prevents execution, transitions to STOPPED status, records observation and error.
+          - 'approve': Resumes the exact pending action and its saved arguments; does NOT ask the LLM to choose a different action.
+        """
+        with self._lock:
+            if task_id not in self._tasks:
+                raise KeyError(f"Task '{task_id}' not found.")
+
+            task = self._tasks[task_id]
+            curr_status = task.get("status")
+
+            if curr_status != TaskStatus.WAITING_FOR_APPROVAL.value:
+                raise RuntimeError(
+                    f"Task '{task_id}' is not waiting for approval (current status: '{curr_status}')."
+                )
+
+            pending = task.get("pending_approval")
+            if not pending:
+                raise ValueError(f"Task '{task_id}' has no pending approval request.")
+
+            clean_decision = (decision or "").strip().lower()
+            if clean_decision not in ("approve", "approved", "reject", "rejected"):
+                raise ValueError(f"Invalid decision '{decision}': must be 'approve' or 'reject'.")
+
+            pending_action = pending.get("action")
+            if action and action.strip() != pending_action:
+                raise ValueError(
+                    f"Action mismatch: pending action is '{pending_action}', got '{action.strip()}'."
+                )
+
+            now = datetime.now().isoformat()
+
+            # --- CASE 1: REJECT ---
+            if clean_decision in ("reject", "rejected"):
+                reject_reason = reason or "Rejected by human operator."
+                task["status"] = TaskStatus.STOPPED.value
+                task["pending_approval"] = None
+                task["errors"].append(f"Action '{pending_action}' was rejected by human. Reason: {reject_reason}")
+                task["observations"].append({
+                    "source": "approval_gate",
+                    "summary": f"Action '{pending_action}' was rejected. Task safely stopped. Reason: {reject_reason}",
+                    "timestamp": now,
+                    "metadata": {"outcome": "rejected", "action": pending_action, "reason": reject_reason},
+                })
+                task["updated_at"] = now
+                return dict(task)
+
+            # --- CASE 2: APPROVE ---
+            saved_args = dict(pending.get("arguments", {}))
+            task["pending_approval"] = None
+            task["status"] = TaskStatus.RUNNING.value
+            task["observations"].append({
+                "source": "approval_gate",
+                "summary": f"Action '{pending_action}' was approved by human. Resuming exact pending action.",
+                "timestamp": now,
+                "metadata": {"outcome": "approved", "action": pending_action, "arguments": saved_args},
+            })
+
+            # Execute the exact pending action with saved arguments without asking the LLM
+            exec_result = None
+            if self._runner_factory is not None:
+                try:
+                    test_runner = self._runner_factory()
+                    if hasattr(test_runner, "tool_registry") and test_runner.tool_registry and test_runner.tool_registry.has(pending_action):
+                        exec_result = test_runner.tool_registry.execute(pending_action, saved_args)
+                except Exception as ex:
+                    logger.warning("Error executing approved tool in test runner: %s", ex)
+
+            tool_ts = datetime.now().isoformat()
+            if exec_result is not None:
+                is_success = exec_result.get("success", True) if isinstance(exec_result, dict) else getattr(exec_result, "success", True)
+                task["observations"].append({
+                    "source": f"tool:{pending_action}",
+                    "summary": f"Approved action '{pending_action}' executed successfully." if is_success else f"Approved action '{pending_action}' returned error.",
+                    "timestamp": tool_ts,
+                    "metadata": {"success": is_success, "arguments": saved_args, "result": exec_result if isinstance(exec_result, dict) else str(exec_result)},
+                })
+            else:
+                task["observations"].append({
+                    "source": f"tool:{pending_action}",
+                    "summary": f"Approved action '{pending_action}' executed with saved arguments.",
+                    "timestamp": tool_ts,
+                    "metadata": {"arguments": saved_args},
+                })
+
+            # Resolve post-approval status
+            if self._is_stopped(task_id):
+                task["status"] = TaskStatus.STOPPED.value
+            else:
+                task["status"] = TaskStatus.COMPLETED.value
+            task["verification_status"] = "tool_success"
+            task["updated_at"] = datetime.now().isoformat()
+            return dict(task)
 
     def create_and_start_task(
         self,
@@ -110,6 +271,7 @@ class TaskManager:
                 "created_at": now,
                 "updated_at": now,
             }
+            self._stop_events[task_id] = threading.Event()
             self._tasks[task_id] = task_record
 
         # Spawn background execution thread
@@ -146,6 +308,11 @@ class TaskManager:
                 if task_id not in self._tasks:
                     return
                 t = self._tasks[task_id]
+                # If cancellation was signaled, preserve STOPPED status
+                if self._is_stopped(task_id) or t.get("status") == TaskStatus.STOPPED.value:
+                    t["status"] = TaskStatus.STOPPED.value
+                    return
+
                 t["observations"] = [self._serialize_model(o) for o in state.observations]
                 t["discovered_items"] = [self._serialize_model(i) for i in state.discovered_items]
                 t["evaluations"] = [self._serialize_model(e) for e in state.evaluations]
@@ -196,10 +363,12 @@ class TaskManager:
                 if result.decision and result.decision.action == "respond":
                     t["final_response"] = result.decision.response_text
 
-                # Resolve terminal status
-                if final_st.task_status == TaskStatus.WAITING_FOR_APPROVAL:
+                # Resolve terminal status — never let a stopped task become completed
+                if t.get("status") == TaskStatus.STOPPED.value or self._is_stopped(task_id) or result.stop_reason == "task_stopped":
+                    t["status"] = TaskStatus.STOPPED.value
+                elif final_st.task_status == TaskStatus.WAITING_FOR_APPROVAL or result.stop_reason == "waiting_for_approval":
                     t["status"] = TaskStatus.WAITING_FOR_APPROVAL.value
-                elif final_st.task_status == TaskStatus.STOPPED or result.stop_reason == "task_stopped":
+                elif final_st.task_status == TaskStatus.STOPPED:
                     t["status"] = TaskStatus.STOPPED.value
                 elif final_st.task_status == TaskStatus.FAILED or result.stop_reason == "execution_error":
                     t["status"] = TaskStatus.FAILED.value

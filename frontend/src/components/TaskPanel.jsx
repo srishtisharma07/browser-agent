@@ -4,7 +4,17 @@ import { useState } from 'react'
  * TaskPanel — left sidebar where the user defines a high-level task and optional candidate profile.
  * Connected to FastAPI task execution API.
  */
-export default function TaskPanel({ onStartTask, isRunning, taskId, errors = [] }) {
+export default function TaskPanel({
+  onStartTask,
+  onStopTask,
+  isRunning,
+  taskStatus = 'idle',
+  isStopping = false,
+  pendingApproval = null,
+  taskId,
+  errors = [],
+  actionFeedback = null,
+}) {
   const [goal, setGoal] = useState('')
   const [showProfile, setShowProfile] = useState(false)
 
@@ -39,6 +49,7 @@ export default function TaskPanel({ onStartTask, isRunning, taskId, errors = [] 
 
   const hasErrors = errors && errors.length > 0
   const isProfileConfigured = Boolean(preferredRole || education || graduationYear || skills || locations || constraints)
+  const isTaskActive = taskStatus === 'running' || taskStatus === 'waiting_for_approval'
 
   return (
     <aside className="flex flex-col gap-4 w-72 shrink-0">
@@ -201,7 +212,59 @@ export default function TaskPanel({ onStartTask, isRunning, taskId, errors = [] 
             </>
           )}
         </button>
+
+        {/* Stop Agent Button */}
+        {isTaskActive && (
+          <button
+            id="stop-agent-btn"
+            type="button"
+            onClick={onStopTask}
+            disabled={isStopping}
+            className={`flex items-center justify-center gap-2 w-full rounded-lg px-3 py-2 text-xs font-semibold select-none transition-all cursor-pointer border ${
+              isStopping
+                ? 'border-red-500/20 bg-red-500/10 text-red-400/50 cursor-wait'
+                : 'border-red-500/40 bg-red-500/10 hover:bg-red-500/20 text-red-300 shadow-lg shadow-red-500/10 active:scale-[0.98]'
+            }`}
+            title="Safely cancel active task"
+          >
+            <StopIcon />
+            <span>{isStopping ? 'Stopping Agent…' : 'Stop Agent'}</span>
+          </button>
+        )}
       </form>
+
+      {/* Action feedback banner */}
+      {actionFeedback && (
+        <div
+          id="action-feedback-banner"
+          className={`rounded-lg border p-3 text-xs leading-relaxed flex flex-col gap-1 ${
+            actionFeedback.type === 'success'
+              ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+              : 'border-red-500/40 bg-red-500/10 text-red-300'
+          }`}
+        >
+          <span className="font-semibold text-[11px] uppercase tracking-wider">
+            {actionFeedback.type === 'success' ? 'Update Notice' : 'Action Notice'}
+          </span>
+          <p className="text-[11px] break-words">{actionFeedback.message}</p>
+        </div>
+      )}
+
+      {/* Waiting for approval alert in left panel */}
+      {taskStatus === 'waiting_for_approval' && (
+        <div
+          id="task-panel-approval-alert"
+          className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200 flex flex-col gap-1.5"
+        >
+          <div className="flex items-center gap-1.5 font-semibold text-amber-300">
+            <ShieldIcon />
+            <span>Approval Required</span>
+          </div>
+          <p className="text-[11px] text-amber-200/90 leading-relaxed">
+            The agent paused before executing <code className="font-mono text-amber-100 bg-amber-500/20 px-1 py-0.5 rounded">{pendingApproval?.action || 'action'}</code>. Review and decide in the central panel.
+          </p>
+        </div>
+      )}
 
       {/* Actionable error notice */}
       {hasErrors && (
@@ -219,7 +282,12 @@ export default function TaskPanel({ onStartTask, isRunning, taskId, errors = [] 
       )}
 
       {/* Status explanation */}
-      {isRunning ? (
+      {taskStatus === 'waiting_for_approval' ? (
+        <p className="text-[11px] text-amber-400/90 text-center leading-relaxed">
+          Agent awaiting human approval.
+          <br />Approve or reject in viewport.
+        </p>
+      ) : isRunning ? (
         <p className="text-[11px] text-blue-400/80 text-center leading-relaxed">
           Agent running autonomously.
           <br />Polling status and observations…
@@ -325,3 +393,21 @@ function ConfigIcon() {
     </svg>
   )
 }
+
+function StopIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="currentColor" className="size-3 text-red-400" aria-hidden="true">
+      <rect x="3" y="3" width="10" height="10" rx="1.5" />
+    </svg>
+  )
+}
+
+function ShieldIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"
+         strokeLinecap="round" strokeLinejoin="round" className="size-3.5 text-amber-400" aria-hidden="true">
+      <path d="M8 1.5l5 2v4.5c0 3.5-2.5 6-5 7-2.5-1-5-3.5-5-7V3.5l5-2z" />
+    </svg>
+  )
+}
+

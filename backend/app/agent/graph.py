@@ -74,10 +74,15 @@ def create_agent_graph(
         """
         current_agent_state = state["agent_state"]
 
-        # Check explicit STOPPED status before decision
+        # Check explicit STOPPED or WAITING_FOR_APPROVAL status before decision
         if current_agent_state.task_status == TaskStatus.STOPPED:
             return {
                 "stop_reason": "task_stopped",
+                "verification_status": "action_failed",
+            }
+        if current_agent_state.task_status == TaskStatus.WAITING_FOR_APPROVAL:
+            return {
+                "stop_reason": "waiting_for_approval",
                 "verification_status": "action_failed",
             }
 
@@ -166,6 +171,8 @@ def create_agent_graph(
 
         if agent_st and agent_st.task_status == TaskStatus.STOPPED:
             stop_reason = "task_stopped"
+        elif agent_st and agent_st.task_status == TaskStatus.WAITING_FOR_APPROVAL:
+            stop_reason = "waiting_for_approval"
         elif decision_res and decision_res.action == "respond":
             stop_reason = "completed_response"
             updated_agent_st.task_status = TaskStatus.COMPLETED

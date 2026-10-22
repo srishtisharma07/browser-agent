@@ -88,13 +88,14 @@ class ApprovalGate:
         description: str,
         state: AgentState,
         target: Optional[str] = None,
+        arguments: Optional[dict] = None,
     ) -> AgentState:
         """
         Check whether an action requires approval before execution.
 
         If the action is consequential:
           - Sets task_status to WAITING_FOR_APPROVAL.
-          - Populates pending_approval with an ApprovalRequest.
+          - Populates pending_approval with an ApprovalRequest (including saved arguments).
           - Adds an observation recording the pause.
           - Returns the updated state WITHOUT executing the action.
 
@@ -106,6 +107,7 @@ class ApprovalGate:
             description: Human-readable description of what is about to happen.
             state: Current AgentState (will be deep-copied internally).
             target: Optional target element/URL/address.
+            arguments: Optional saved arguments for the pending action.
 
         Returns:
             Updated AgentState. Caller must check task_status before executing.
@@ -120,6 +122,7 @@ class ApprovalGate:
             action=action_name,
             description=description,
             target=target,
+            arguments=arguments or {},
             required=True,
         )
 
@@ -132,7 +135,7 @@ class ApprovalGate:
                 f"Description: {description}"
             ),
             timestamp=datetime.now().isoformat(),
-            metadata={"action": action_name, "target": target},
+            metadata={"action": action_name, "target": target, "arguments": arguments or {}},
         ))
 
         return new_state

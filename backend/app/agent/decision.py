@@ -259,6 +259,7 @@ class AgentDecisionEngine:
                 description=f"Agent wants to execute '{tool_name}' with args: {arguments}",
                 state=new_state,
                 target=arguments.get("url") or arguments.get("selector"),
+                arguments=arguments,
             )
             if gated_state.task_status == TaskStatus.WAITING_FOR_APPROVAL:
                 # Action is paused — do NOT execute. Return approval-pending result.

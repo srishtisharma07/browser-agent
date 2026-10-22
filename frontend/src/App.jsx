@@ -18,7 +18,10 @@ export default function App() {
   const [backendStatus, setBackendStatus] = useState('checking')
   const [currentTask, setCurrentTask] = useState(null)
   const [isStarting, setIsStarting] = useState(false)
+  const [isDecidingApproval, setIsDecidingApproval] = useState(false)
+  const [isStopping, setIsStopping] = useState(false)
   const [taskError, setTaskError] = useState(null)
+  const [actionFeedback, setActionFeedback] = useState(null)
 
   // VITE_API_BASE_URL is empty in dev so the Vite proxy forwards /api/* → :8000
   const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
@@ -59,6 +62,7 @@ export default function App() {
     if (!goal || !goal.trim() || isStarting) return
     setIsStarting(true)
     setTaskError(null)
+    setActionFeedback(null)
 
     try {
       const payload = { goal: goal.trim() }
@@ -90,6 +94,90 @@ export default function App() {
       setTaskError(err.message || 'Failed to connect to backend server.')
     } finally {
       setIsStarting(false)
+    }
+  }
+
+  // 4. Human approval handler
+  const handleApproval = async (decision, reason = null) => {
+    if (!currentTask?.task_id || isDecidingApproval) return
+    setIsDecidingApproval(true)
+    setActionFeedback(null)
+
+    try {
+      const payload = {
+        decision,
+        action: currentTask.pending_approval?.action,
+      }
+      if (reason && reason.trim()) {
+        payload.reason = reason.trim()
+      }
+
+      const res = await fetch(`${API_BASE}/api/tasks/${currentTask.task_id}/approval`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+
+      if (!res.ok) {
+        let errDetail = `Approval failed (HTTP ${res.status})`
+        try {
+          const errData = await res.json()
+          if (errData?.detail) errDetail = errData.detail
+        } catch {
+          // ignore
+        }
+        setActionFeedback({ type: 'error', message: errDetail })
+        return
+      }
+
+      const updated = await res.json()
+      setCurrentTask(updated)
+      setActionFeedback({
+        type: 'success',
+        message: decision === 'approve'
+          ? `Action '${currentTask.pending_approval?.action}' approved and resumed.`
+          : `Action '${currentTask.pending_approval?.action}' rejected. Task safely stopped.`,
+      })
+    } catch (err) {
+      setActionFeedback({ type: 'error', message: err.message || 'Failed to submit approval.' })
+    } finally {
+      setIsDecidingApproval(false)
+    }
+  }
+
+  // 5. Safe cancellation handler
+  const handleStopTask = async () => {
+    if (!currentTask?.task_id || isStopping) return
+    setIsStopping(true)
+    setActionFeedback(null)
+
+    try {
+      const res = await fetch(`${API_BASE}/api/tasks/${currentTask.task_id}/stop`, {
+        method: 'POST',
+      })
+
+      if (!res.ok) {
+        let errDetail = `Stop request failed (HTTP ${res.status})`
+        try {
+          const errData = await res.json()
+          if (errData?.detail) errDetail = errData.detail
+        } catch {
+          // ignore
+        }
+        setActionFeedback({ type: 'error', message: errDetail })
+        return
+      }
+
+      const updated = await res.json()
+      setCurrentTask(updated)
+      setActionFeedback({
+        type: 'success',
+        message: 'Cancellation confirmed. Agent stopped safely.',
+      })
+    } catch (err) {
+      setActionFeedback({ type: 'error', message: err.message || 'Failed to stop task.' })
+    } finally {
+      setIsStopping(false)
     }
   }
 
@@ -129,9 +217,14 @@ export default function App() {
         <div className="flex flex-col p-4 overflow-y-auto">
           <TaskPanel
             onStartTask={handleStartTask}
+            onStopTask={handleStopTask}
             isRunning={isRunning}
+            taskStatus={taskStatus}
+            isStopping={isStopping}
+            pendingApproval={currentTask?.pending_approval}
             taskId={taskId}
             errors={allErrors}
+            actionFeedback={actionFeedback}
           />
         </div>
 
@@ -144,6 +237,12 @@ export default function App() {
             applicationDrafts={applicationDrafts}
             currentStep={currentStep}
             candidateProfile={candidateProfile}
+            pendingApproval={currentTask?.pending_approval}
+            onApprove={(reason) => handleApproval('approve', reason)}
+            onReject={(reason) => handleApproval('reject', reason)}
+            isDecidingApproval={isDecidingApproval}
+            isStopping={isStopping}
+            actionFeedback={actionFeedback}
           />
         </div>
 
