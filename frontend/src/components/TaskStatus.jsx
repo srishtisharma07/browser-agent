@@ -6,6 +6,7 @@ export default function TaskStatus({
   taskStatus = 'idle',
   objective = '',
   cycleCount = 0,
+  maxCycles = 5,
   verificationStatus = 'not_started',
   taskId = null,
   candidateProfile = null,
@@ -70,7 +71,19 @@ export default function TaskStatus({
     {
       id: 'progress-field',
       label: 'Progress',
-      value: taskStatus === 'completed' ? '100 %' : taskStatus === 'running' ? `Cycle ${cycleCount}` : '0 %',
+      value:
+        taskStatus === 'completed'
+          ? `100 % (${cycleCount}/${maxCycles} cycles)`
+          : taskStatus === 'running'
+          ? `Cycle ${cycleCount} / ${maxCycles}`
+          : cycleCount > 0
+          ? `${cycleCount} / ${maxCycles} cycles`
+          : '0 %',
+    },
+    {
+      id: 'cycle-limit-field',
+      label: 'Cycle limit',
+      value: `${maxCycles} cycles`,
     },
     {
       id: 'verify-field',

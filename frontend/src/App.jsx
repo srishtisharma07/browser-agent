@@ -187,25 +187,26 @@ export default function App() {
   const taskId = currentTask?.task_id || null
   const objective = currentTask?.goal || ''
   const candidateProfile = currentTask?.candidate_profile || null
-  const observations = currentTask?.observations || []
-  const evaluations = currentTask?.evaluations || []
-  const applicationDrafts = currentTask?.application_drafts || []
-  const discoveredItems = currentTask?.discovered_items || []
+  const observations = Array.isArray(currentTask?.observations) ? currentTask.observations : []
+  const evaluations = Array.isArray(currentTask?.evaluations) ? currentTask.evaluations : []
+  const applicationDrafts = Array.isArray(currentTask?.application_drafts) ? currentTask.application_drafts : []
+  const discoveredItems = Array.isArray(currentTask?.discovered_items) ? currentTask.discovered_items : []
   const currentStep = currentTask?.current_step || null
-  const cycleCount = currentTask?.cycle_count || 0
+  const cycleCount = typeof currentTask?.cycle_count === 'number' ? currentTask.cycle_count : 0
+  const maxCycles = typeof currentTask?.max_cycles === 'number' ? currentTask.max_cycles : 5
   const verificationStatus = currentTask?.verification_status || 'not_started'
   const finalResponse = currentTask?.final_response || null
 
   // Collect all errors (network / validation + task execution errors)
   const allErrors = []
   if (taskError) allErrors.push(taskError)
-  if (currentTask?.errors) allErrors.push(...currentTask.errors)
+  if (Array.isArray(currentTask?.errors)) allErrors.push(...currentTask.errors)
 
   // Find latest active URL from observations
   const activeUrl = observations
     .slice()
     .reverse()
-    .find((o) => Boolean(o.url))?.url || null
+    .find((o) => Boolean(o?.url))?.url || null
 
   return (
     <div className="h-screen flex flex-col bg-[#080d1a] text-slate-200 overflow-hidden">
@@ -223,6 +224,7 @@ export default function App() {
             isStopping={isStopping}
             pendingApproval={currentTask?.pending_approval}
             taskId={taskId}
+            maxCycles={maxCycles}
             errors={allErrors}
             actionFeedback={actionFeedback}
           />
@@ -264,6 +266,7 @@ export default function App() {
         taskStatus={taskStatus}
         objective={objective}
         cycleCount={cycleCount}
+        maxCycles={maxCycles}
         verificationStatus={verificationStatus}
         taskId={taskId}
         candidateProfile={candidateProfile}

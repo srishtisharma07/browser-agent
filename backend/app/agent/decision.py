@@ -318,6 +318,34 @@ class AgentDecisionEngine:
                 summary = f"Tool '{tool_name}' returned result."
                 is_success = True
 
+            # Rich observation content for extraction tools
+            if is_success and tool_name == "get_page_text":
+                text_content = ""
+                if isinstance(exec_result, dict):
+                    text_content = exec_result.get("text") or ""
+                else:
+                    text_content = getattr(exec_result, "text", "") or ""
+                if text_content:
+                    snippet = text_content[:1000].strip()
+                    summary = f"Tool 'get_page_text' executed successfully. Extracted text:\n{snippet}"
+                else:
+                    summary = "Tool 'get_page_text' executed successfully (page had no text content)."
+            elif is_success and tool_name == "get_links":
+                links_list = []
+                if isinstance(exec_result, dict):
+                    links_list = exec_result.get("links", [])
+                else:
+                    links_list = getattr(exec_result, "links", []) or []
+                if links_list:
+                    formatted_links = []
+                    for l in links_list[:15]:
+                        lt = getattr(l, "text", "") if hasattr(l, "text") else (l.get("text", "") if isinstance(l, dict) else "")
+                        lu = getattr(l, "url", "") if hasattr(l, "url") else (l.get("url", "") if isinstance(l, dict) else "")
+                        formatted_links.append(f"[{lt}]({lu})")
+                    summary = f"Tool 'get_links' executed successfully. Extracted {len(links_list)} links: " + ", ".join(formatted_links)
+                else:
+                    summary = "Tool 'get_links' executed successfully (no links found)."
+
             metadata = {"success": is_success, "arguments": arguments}
             if observation_data:
                 if hasattr(observation_data, "to_dict"):
@@ -448,6 +476,7 @@ class AgentDecisionEngine:
             source="llm_response",
             summary=f"Agent response: {response_text[:100]}...",
             timestamp=timestamp,
+            metadata={"response_text": response_text},
         ))
 
         return AgentDecisionResult(

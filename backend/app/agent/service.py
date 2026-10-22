@@ -254,6 +254,7 @@ class TaskManager:
             task_record: Dict[str, Any] = {
                 "task_id": task_id,
                 "goal": clean_goal,
+                "max_cycles": max_cycles,
                 "status": TaskStatus.RUNNING.value,
                 "candidate_profile": self._serialize_model(candidate_profile) if candidate_profile else None,
                 "observations": [],
@@ -324,10 +325,34 @@ class TaskManager:
                 t["verification_status"] = state.verification_status
                 if state.errors:
                     t["errors"] = list(state.errors)
+
+                # Keep live cycle_count in sync as actions execute
+                live_cycles = len([
+                    o for o in state.observations
+                    if (hasattr(o, "source") and (o.source.startswith("tool:") or o.source == "llm_response"))
+                    or (isinstance(o, dict) and (str(o.get("source", "")).startswith("tool:") or o.get("source") == "llm_response"))
+                ])
+                if live_cycles > t.get("cycle_count", 0):
+                    t["cycle_count"] = live_cycles
+
+                # Check if final response is already present in observations
+                for o in reversed(state.observations):
+                    o_source = getattr(o, "source", None) or (o.get("source") if isinstance(o, dict) else None)
+                    if o_source == "llm_response":
+                        o_meta = getattr(o, "metadata", {}) or (o.get("metadata", {}) if isinstance(o, dict) else {})
+                        resp = o_meta.get("response_text")
+                        if resp and not t.get("final_response"):
+                            t["final_response"] = resp
+                        break
+
                 if state.task_status:
                     status_val = state.task_status.value if hasattr(state.task_status, "value") else str(state.task_status)
                     if status_val != TaskStatus.IDLE.value:
-                        t["status"] = status_val
+                        if status_val == TaskStatus.COMPLETED.value:
+                            if t.get("final_response"):
+                                t["status"] = status_val
+                        else:
+                            t["status"] = status_val
                 t["updated_at"] = datetime.now().isoformat()
 
         try:

@@ -72,13 +72,27 @@ export default function BrowserViewer({
       </div>
 
       {/* URL bar */}
-      <div className="flex items-center gap-2 px-4 py-2 border-b border-white/6 bg-white/[0.02]">
-        <span className={activeUrl ? "text-emerald-400" : "text-slate-700"}>
-          <LockIcon />
-        </span>
-        <span className={`text-[11px] font-mono truncate select-none ${activeUrl ? "text-slate-200" : "text-slate-700"}`}>
-          {displayUrl}
-        </span>
+      <div className="flex items-center justify-between gap-2 px-4 py-2 border-b border-white/6 bg-white/[0.02]">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className={activeUrl ? "text-emerald-400" : "text-slate-700"}>
+            <LockIcon />
+          </span>
+          <span className={`text-[11px] font-mono truncate select-none ${activeUrl ? "text-slate-200" : "text-slate-700"}`}>
+            {displayUrl}
+          </span>
+        </div>
+        {activeUrl && (activeUrl.startsWith('http://') || activeUrl.startsWith('https://')) && (
+          <a
+            href={activeUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="text-[10px] text-blue-400 hover:text-blue-300 hover:underline flex items-center gap-1 shrink-0 font-medium"
+            title="Open page in new browser tab"
+          >
+            <span>Open Link</span>
+            <ExternalLinkIcon />
+          </a>
+        )}
       </div>
 
       {/* Main viewport */}
@@ -101,7 +115,7 @@ export default function BrowserViewer({
               )}
             </div>
             <div className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
-              {finalResponse}
+              {typeof finalResponse === 'string' ? finalResponse : JSON.stringify(finalResponse, null, 2)}
             </div>
             {applicationDrafts.length > 0 && (
               <div className="flex flex-col gap-2 pt-2 border-t border-white/6">
@@ -109,9 +123,9 @@ export default function BrowserViewer({
                 <div className="flex flex-col gap-1.5">
                   {applicationDrafts.map((draft, idx) => (
                     <div key={idx} className="flex items-center justify-between text-xs px-3 py-2 rounded bg-white/[0.02] border border-white/6">
-                      <span className="font-medium text-slate-200 truncate">{draft.item_title}</span>
+                      <span className="font-medium text-slate-200 truncate">{draft.item_title || 'Untitled Draft'}</span>
                       <span className="text-[10px] font-mono text-emerald-400 capitalize px-2 py-0.5 rounded bg-emerald-500/10">
-                        {draft.status}
+                        {draft.status || 'draft'}
                       </span>
                     </div>
                   ))}
@@ -361,4 +375,16 @@ function XIcon() {
     </svg>
   )
 }
+
+function ExternalLinkIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"
+         strokeLinecap="round" strokeLinejoin="round" className="size-3" aria-hidden="true">
+      <path d="M12 9v4a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h4" />
+      <polyline points="10 2 14 2 14 6" />
+      <line x1="6" y1="10" x2="14" y2="2" />
+    </svg>
+  )
+}
+
 

@@ -131,7 +131,9 @@ export default function AgentActivity({
         {hasErrors && (
           <div className="p-2.5 rounded-lg border border-red-500/30 bg-red-500/10 text-xs text-red-300">
             <div className="font-medium text-red-200 mb-0.5">Execution Alert</div>
-            <p className="text-[11px] text-red-300/80 break-words">{errors[0]}</p>
+            <p className="text-[11px] text-red-300/80 break-words">
+              {typeof errors[0] === 'string' ? errors[0] : (errors[0]?.message || JSON.stringify(errors[0]))}
+            </p>
           </div>
         )}
 
@@ -145,7 +147,7 @@ export default function AgentActivity({
               </li>
             ) : (
               observations.map((obs, idx) => {
-                const s = getSourceStyle(obs.source)
+                const s = getSourceStyle(obs?.source)
                 return (
                   <li
                     key={idx}
@@ -155,19 +157,24 @@ export default function AgentActivity({
                     <div className="flex flex-col gap-1 min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-1">
                         <span className={`text-[9px] font-mono uppercase px-1.5 py-0.5 rounded ${s.badge}`}>
-                          {obs.source || 'observation'}
+                          {obs?.source || 'observation'}
                         </span>
                         <span className="text-[9px] font-mono text-slate-600">
-                          {formatTimestamp(obs.timestamp)}
+                          {formatTimestamp(obs?.timestamp)}
                         </span>
                       </div>
                       <span className="text-xs text-slate-300 leading-snug break-words">
-                        {obs.summary}
+                        {obs?.summary || ''}
                       </span>
-                      {obs.url && (
-                        <span className="text-[10px] font-mono text-blue-400/80 truncate">
+                      {obs?.url && (
+                        <a
+                          href={obs.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[10px] font-mono text-blue-400/80 hover:text-blue-300 hover:underline truncate"
+                        >
                           {obs.url}
-                        </span>
+                        </a>
                       )}
                     </div>
                   </li>
@@ -297,6 +304,15 @@ export default function AgentActivity({
                       {draft.matched_requirements.map((req, rIdx) => (
                         <span key={rIdx} className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-300">
                           ✓ {req}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {draft.missing_requirements && draft.missing_requirements.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {draft.missing_requirements.map((req, rIdx) => (
+                        <span key={rIdx} className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-300">
+                          ⚠ Missing: {req}
                         </span>
                       ))}
                     </div>

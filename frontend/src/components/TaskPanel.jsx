@@ -12,6 +12,7 @@ export default function TaskPanel({
   isStopping = false,
   pendingApproval = null,
   taskId,
+  maxCycles = 5,
   errors = [],
   actionFeedback = null,
 }) {
@@ -277,7 +278,9 @@ export default function TaskPanel({
             <AlertIcon />
             <span>Execution Notice</span>
           </div>
-          <p className="text-[11px] text-red-300/90 break-words">{errors[0]}</p>
+          <p className="text-[11px] text-red-300/90 break-words">
+            {typeof errors[0] === 'string' ? errors[0] : (errors[0]?.message || JSON.stringify(errors[0]))}
+          </p>
         </div>
       )}
 
@@ -307,6 +310,7 @@ export default function TaskPanel({
         <SectionHeader icon={<ConfigIcon />} title="Configuration" small />
         <ConfigRow label="Model" value="Gemini (gemini-2.5-flash)" />
         <ConfigRow label="Browser" value="Playwright (Chromium)" />
+        <ConfigRow label="Cycle Limit" value={`${maxCycles} cycles`} />
         <ConfigRow label="Mode" value="Autonomous" />
       </div>
     </aside>
