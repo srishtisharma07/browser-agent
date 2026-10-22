@@ -8,6 +8,7 @@ export default function TaskStatus({
   cycleCount = 0,
   verificationStatus = 'not_started',
   taskId = null,
+  candidateProfile = null,
 }) {
   const formatStatus = (s) => {
     switch (s) {
@@ -57,6 +58,15 @@ export default function TaskStatus({
       label: 'Current objective',
       value: objective ? (objective.length > 40 ? `${objective.slice(0, 40)}…` : objective) : 'Waiting for task',
     },
+    ...(candidateProfile
+      ? [
+          {
+            id: 'profile-field',
+            label: 'Profile',
+            value: candidateProfile.preferred_role || candidateProfile.education || 'Configured',
+          },
+        ]
+      : []),
     {
       id: 'progress-field',
       label: 'Progress',

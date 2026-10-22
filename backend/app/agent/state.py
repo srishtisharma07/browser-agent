@@ -31,6 +31,57 @@ class Constraint(BaseModel):
         return v
 
 
+class CandidateProfile(BaseModel):
+    """
+    Structured candidate profile used to guide internship discovery and match evaluation.
+    """
+    education: Optional[str] = Field(
+        default=None,
+        description="Candidate's education, degree, major, or institution (e.g. 'B.S. in Computer Science').",
+    )
+    graduation_year: Optional[int] = Field(
+        default=None,
+        description="Expected or actual graduation year (e.g. 2026).",
+    )
+    technical_skills: List[str] = Field(
+        default_factory=list,
+        description="List of technical skills (e.g. ['Python', 'React', 'FastAPI', 'Playwright']).",
+    )
+    experience_level: Optional[str] = Field(
+        default=None,
+        description="Candidate experience level (e.g. 'intern', 'undergraduate', 'entry-level').",
+    )
+    preferred_role: Optional[str] = Field(
+        default=None,
+        description="Target role title (e.g. 'Software Engineering Intern').",
+    )
+    location_preferences: List[str] = Field(
+        default_factory=list,
+        description="Preferred locations or working modes (e.g. ['Remote', 'San Francisco', 'Bangalore']).",
+    )
+    internship_constraints: List[str] = Field(
+        default_factory=list,
+        description="Constraints or term requirements (e.g. ['Summer 2026', 'Paid only']).",
+    )
+
+    @field_validator("graduation_year")
+    def validate_graduation_year(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None:
+            if v < 1980 or v > 2100:
+                raise ValueError("graduation_year must be a valid year between 1980 and 2100")
+        return v
+
+    @field_validator("technical_skills", "location_preferences", "internship_constraints", mode="before")
+    def validate_string_lists(cls, v: Any) -> List[str]:
+        if v is None:
+            return []
+        if isinstance(v, str):
+            return [item.strip() for item in v.split(",") if item.strip()]
+        if isinstance(v, (list, tuple, set)):
+            return [str(item).strip() for item in v if str(item).strip()]
+        return []
+
+
 class Observation(BaseModel):
     """A concise factual observation from the environment."""
     source: str
@@ -150,6 +201,7 @@ class AgentState(BaseModel):
     research_findings: List[ResearchFinding] = Field(default_factory=list)
     evaluations: List[ItemEvaluation] = Field(default_factory=list)
     application_drafts: List[ApplicationDraft] = Field(default_factory=list)
+    candidate_profile: Optional[CandidateProfile] = None
     task_status: TaskStatus = TaskStatus.IDLE
     pending_approval: Optional[ApprovalRequest] = None
     verification_status: str = "not_started"

@@ -8,6 +8,7 @@ export default function BrowserViewer({
   finalResponse = null,
   applicationDrafts = [],
   currentStep = null,
+  candidateProfile = null,
 }) {
   const displayUrl = activeUrl || (taskStatus === 'running' ? 'about:blank — navigating…' : 'about:blank — no active session')
 
@@ -24,6 +25,11 @@ export default function BrowserViewer({
             <span className="ml-2 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-[10px] font-medium text-blue-400">
               <span className="size-1.5 rounded-full bg-blue-400 animate-pulse" />
               Active Session
+            </span>
+          )}
+          {candidateProfile && (
+            <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20 text-[10px] font-mono text-indigo-300 truncate max-w-xs">
+              Profile: {candidateProfile.preferred_role || candidateProfile.education || 'Configured'}
             </span>
           )}
         </div>

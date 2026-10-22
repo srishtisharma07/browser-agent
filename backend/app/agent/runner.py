@@ -8,7 +8,7 @@ import logging
 from typing import Callable, List, Optional
 from pydantic import BaseModel, Field
 
-from app.agent.state import AgentState, Constraint, TaskStatus
+from app.agent.state import AgentState, CandidateProfile, Constraint, TaskStatus
 from app.agent.tools import ToolRegistry
 from app.agent.decision import AgentDecisionEngine
 from app.agent.graph import create_agent_graph, run_agent_graph, AgentGraphResult
@@ -47,6 +47,7 @@ class AgentRunner:
         task_id: Optional[str] = None,
         max_cycles: int = 5,
         constraints: Optional[List[Constraint]] = None,
+        candidate_profile: Optional[CandidateProfile] = None,
         on_state_update: Optional[Callable[[AgentState], None]] = None,
     ) -> AgentGraphResult:
         """
@@ -57,6 +58,7 @@ class AgentRunner:
             task_id: Optional unique task identifier (generated if omitted).
             max_cycles: Maximum allowed decision cycles (default: 5).
             constraints: Optional initial constraints list.
+            candidate_profile: Optional candidate profile for profile-aware matching.
             on_state_update: Optional callback invoked with updated AgentState at each step.
 
         Returns:
@@ -71,6 +73,7 @@ class AgentRunner:
             task_id=tid,
             user_goal=user_goal.strip(),
             extracted_constraints=constraints or [],
+            candidate_profile=candidate_profile,
             task_status=TaskStatus.RUNNING,
         )
 
@@ -124,6 +127,7 @@ def run_agent_task(
     tool_registry: Optional[ToolRegistry] = None,
     llm_provider: Optional[LLMProvider] = None,
     browser_manager: Optional[BrowserManager] = None,
+    candidate_profile: Optional[CandidateProfile] = None,
     on_state_update: Optional[Callable[[AgentState], None]] = None,
 ) -> AgentGraphResult:
     """
@@ -138,5 +142,6 @@ def run_agent_task(
         user_goal=user_goal,
         task_id=task_id,
         max_cycles=max_cycles,
+        candidate_profile=candidate_profile,
         on_state_update=on_state_update,
     )

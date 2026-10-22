@@ -63,6 +63,14 @@ def build_system_instruction() -> str:
         " - Preparing an application is NOT the same as submitting it.\n"
         " - Never submit an application without explicit human approval via the approval gate.\n"
         " - Never claim that an application was submitted unless a verified submission action actually occurred.\n"
+        "For internship discovery and candidate profile matching, you must:\n"
+        " - Evaluate discovered listings against the candidate profile (technical skills, education, graduation year, experience level, location preferences, and internship constraints).\n"
+        " - Base all evaluations strictly on observed evidence from the page content.\n"
+        " - Clearly distinguish between: (1) eligible based on evidence, (2) potentially suitable but missing eligibility information, and (3) rejected with an evidence-based reason.\n"
+        " - Never treat missing evidence as proof of eligibility.\n"
+        " - Never fabricate qualifications for the candidate or fake job listings.\n"
+        " - Use record_research_finding to record extracted listing details (title, company, URL, location, requirements, eligibility).\n"
+        " - Use evaluate_item to select or reject each listing with a concise reason referencing profile criteria and evidence.\n"
         "Rules:\n"
         "1. You must achieve the user's goal while respecting all constraints.\n"
         "2. Choose only from the supplied browser tools. Do NOT invent tool names or arguments.\n"
@@ -80,6 +88,26 @@ def build_decision_prompt(state: AgentState) -> str:
         f"- {c.name}: {c.value} (Required: {c.required})"
         for c in state.extracted_constraints
     ) or "None"
+
+    profile_str = "None"
+    if state.candidate_profile:
+        p = state.candidate_profile
+        parts = []
+        if p.preferred_role:
+            parts.append(f"- Preferred Role: {p.preferred_role}")
+        if p.education:
+            parts.append(f"- Education: {p.education}")
+        if p.graduation_year:
+            parts.append(f"- Graduation Year: {p.graduation_year}")
+        if p.technical_skills:
+            parts.append(f"- Technical Skills: {', '.join(p.technical_skills)}")
+        if p.experience_level:
+            parts.append(f"- Experience Level: {p.experience_level}")
+        if p.location_preferences:
+            parts.append(f"- Location Preferences: {', '.join(p.location_preferences)}")
+        if p.internship_constraints:
+            parts.append(f"- Internship Constraints: {', '.join(p.internship_constraints)}")
+        profile_str = "\n".join(parts) if parts else "Empty Profile"
 
     plan_str = "\n".join(f"- {step}" for step in state.current_plan) or "None"
     completed_str = "\n".join(f"- {step}" for step in state.completed_steps) or "None"
@@ -130,6 +158,7 @@ def build_decision_prompt(state: AgentState) -> str:
         f"Task ID: {state.task_id}\n"
         f"User Goal: {state.user_goal}\n"
         f"Status: {state.task_status.value}\n\n"
+        f"Candidate Profile:\n{profile_str}\n\n"
         f"Extracted Constraints:\n{constraints_str}\n\n"
         f"Current Plan:\n{plan_str}\n\n"
         f"Completed Steps:\n{completed_str}\n\n"

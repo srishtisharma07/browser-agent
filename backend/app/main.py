@@ -8,6 +8,7 @@ from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
+from app.agent.state import CandidateProfile
 from app.agent.service import global_task_manager, TaskManager
 
 app = FastAPI(
@@ -32,6 +33,7 @@ app.add_middleware(
 class CreateTaskRequest(BaseModel):
     goal: str = Field(description="Natural language objective for the agent.")
     max_cycles: Optional[int] = Field(default=5, ge=1, le=20, description="Max execution cycles (1-20).")
+    profile: Optional[CandidateProfile] = Field(default=None, description="Optional candidate profile for profile-aware matching.")
 
     @field_validator("goal")
     def validate_goal(cls, v: str) -> str:
@@ -66,7 +68,11 @@ async def create_task(req: CreateTaskRequest) -> Dict[str, Any]:
     """
     mgr = get_task_mgr()
     try:
-        task = mgr.create_and_start_task(goal=req.goal, max_cycles=req.max_cycles or 5)
+        task = mgr.create_and_start_task(
+            goal=req.goal,
+            max_cycles=req.max_cycles or 5,
+            candidate_profile=req.profile,
+        )
         return task
     except RuntimeError as e:
         raise HTTPException(

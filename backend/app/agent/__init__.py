@@ -5,6 +5,7 @@ Agent package - defines state, tools, decision engine, LangGraph state machine, 
 from app.agent.state import (
     TaskStatus,
     Constraint,
+    CandidateProfile,
     Observation,
     RejectedItem,
     DiscoveredItem,
@@ -32,6 +33,7 @@ from app.agent.runner import (
 __all__ = [
     "TaskStatus",
     "Constraint",
+    "CandidateProfile",
     "Observation",
     "RejectedItem",
     "DiscoveredItem",

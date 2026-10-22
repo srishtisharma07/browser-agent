@@ -1,19 +1,44 @@
 import { useState } from 'react'
 
 /**
- * TaskPanel — left sidebar where the user defines a high-level task for the agent.
+ * TaskPanel — left sidebar where the user defines a high-level task and optional candidate profile.
  * Connected to FastAPI task execution API.
  */
 export default function TaskPanel({ onStartTask, isRunning, taskId, errors = [] }) {
   const [goal, setGoal] = useState('')
+  const [showProfile, setShowProfile] = useState(false)
+
+  // Candidate Profile fields
+  const [preferredRole, setPreferredRole] = useState('')
+  const [education, setEducation] = useState('')
+  const [graduationYear, setGraduationYear] = useState('')
+  const [skills, setSkills] = useState('')
+  const [locations, setLocations] = useState('')
+  const [constraints, setConstraints] = useState('')
 
   const handleSubmit = (e) => {
     e.preventDefault()
     if (!goal.trim() || isRunning) return
-    onStartTask(goal.trim())
+
+    let profile = null
+    const hasProfileData = preferredRole.trim() || education.trim() || graduationYear.trim() || skills.trim() || locations.trim() || constraints.trim()
+
+    if (hasProfileData) {
+      profile = {
+        preferred_role: preferredRole.trim() || undefined,
+        education: education.trim() || undefined,
+        graduation_year: graduationYear.trim() ? parseInt(graduationYear.trim(), 10) : undefined,
+        technical_skills: skills ? skills.split(',').map((s) => s.trim()).filter(Boolean) : [],
+        location_preferences: locations ? locations.split(',').map((s) => s.trim()).filter(Boolean) : [],
+        internship_constraints: constraints ? constraints.split(',').map((s) => s.trim()).filter(Boolean) : [],
+      }
+    }
+
+    onStartTask(goal.trim(), profile)
   }
 
   const hasErrors = errors && errors.length > 0
+  const isProfileConfigured = Boolean(preferredRole || education || graduationYear || skills || locations || constraints)
 
   return (
     <aside className="flex flex-col gap-4 w-72 shrink-0">
@@ -27,7 +52,7 @@ export default function TaskPanel({ onStartTask, isRunning, taskId, errors = [] 
         )}
       </div>
 
-      {/* Task input */}
+      {/* Task input form */}
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
         <div className="flex flex-col gap-2">
           <label htmlFor="task-input" className="text-[11px] uppercase tracking-[0.15em] text-slate-500 font-medium">
@@ -35,15 +60,117 @@ export default function TaskPanel({ onStartTask, isRunning, taskId, errors = [] 
           </label>
           <textarea
             id="task-input"
-            rows={5}
+            rows={4}
             value={goal}
             onChange={(e) => setGoal(e.target.value)}
             disabled={isRunning}
-            className="w-full resize-none rounded-lg border border-white/10 bg-white/5 px-3.5 py-3 text-sm text-slate-200
+            className="w-full resize-none rounded-lg border border-white/10 bg-white/5 px-3.5 py-2.5 text-sm text-slate-200
                        placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-500/60
                        focus:border-blue-500/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            placeholder="Find software engineering internships matching my profile and prepare suitable applications…"
+            placeholder="Find software engineering internships matching my candidate profile and evaluate suitability…"
           />
+        </div>
+
+        {/* Candidate Profile Accordion Toggle */}
+        <div className="flex flex-col rounded-lg border border-white/8 bg-white/[0.02] overflow-hidden">
+          <button
+            type="button"
+            id="toggle-profile-btn"
+            onClick={() => setShowProfile(!showProfile)}
+            className="flex items-center justify-between px-3 py-2 text-xs font-medium text-slate-300 hover:text-white hover:bg-white/[0.03] transition-colors cursor-pointer"
+          >
+            <div className="flex items-center gap-1.5">
+              <ProfileIcon />
+              <span>Candidate Profile</span>
+              {isProfileConfigured && (
+                <span className="size-1.5 rounded-full bg-blue-400 ml-0.5" title="Profile configured" />
+              )}
+            </div>
+            <span className="text-slate-500 text-[10px]">{showProfile ? '▲ Hide' : '▼ Expand'}</span>
+          </button>
+
+          {showProfile && (
+            <div className="flex flex-col gap-2.5 p-3 border-t border-white/6 bg-white/[0.01]">
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] text-slate-400">Preferred Role</label>
+                <input
+                  type="text"
+                  id="profile-role"
+                  value={preferredRole}
+                  onChange={(e) => setPreferredRole(e.target.value)}
+                  disabled={isRunning}
+                  placeholder="e.g. Software Engineering Intern"
+                  className="rounded border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50"
+                />
+              </div>
+
+              <div className="flex gap-2">
+                <div className="flex flex-col gap-1 flex-1">
+                  <label className="text-[10px] text-slate-400">Education</label>
+                  <input
+                    type="text"
+                    id="profile-education"
+                    value={education}
+                    onChange={(e) => setEducation(e.target.value)}
+                    disabled={isRunning}
+                    placeholder="e.g. B.S. in CS"
+                    className="rounded border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50"
+                  />
+                </div>
+                <div className="flex flex-col gap-1 w-20">
+                  <label className="text-[10px] text-slate-400">Grad Year</label>
+                  <input
+                    type="number"
+                    id="profile-grad-year"
+                    value={graduationYear}
+                    onChange={(e) => setGraduationYear(e.target.value)}
+                    disabled={isRunning}
+                    placeholder="2026"
+                    className="rounded border border-white/10 bg-white/5 px-2 py-1 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] text-slate-400">Technical Skills (comma-separated)</label>
+                <input
+                  type="text"
+                  id="profile-skills"
+                  value={skills}
+                  onChange={(e) => setSkills(e.target.value)}
+                  disabled={isRunning}
+                  placeholder="Python, React, FastAPI, Docker"
+                  className="rounded border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] text-slate-400">Location Preferences</label>
+                <input
+                  type="text"
+                  id="profile-locations"
+                  value={locations}
+                  onChange={(e) => setLocations(e.target.value)}
+                  disabled={isRunning}
+                  placeholder="Remote, San Francisco, Bangalore"
+                  className="rounded border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] text-slate-400">Internship Constraints</label>
+                <input
+                  type="text"
+                  id="profile-constraints"
+                  value={constraints}
+                  onChange={(e) => setConstraints(e.target.value)}
+                  disabled={isRunning}
+                  placeholder="Summer 2026, Paid only"
+                  className="rounded border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50"
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Action button */}
@@ -147,6 +274,15 @@ function TaskIcon() {
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"
          strokeLinecap="round" strokeLinejoin="round" className="size-3.5" aria-hidden="true">
       <path d="M2 4h12M2 8h8M2 12h5" />
+    </svg>
+  )
+}
+
+function ProfileIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"
+         strokeLinecap="round" strokeLinejoin="round" className="size-3.5 text-blue-400" aria-hidden="true">
+      <path d="M8 8a3 3 0 100-6 3 3 0 000 6zM2 14a6 6 0 0112 0" />
     </svg>
   )
 }

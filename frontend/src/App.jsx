@@ -55,16 +55,21 @@ export default function App() {
   }, [currentTask?.task_id, currentTask?.status, API_BASE])
 
   // 3. Start task handler
-  const handleStartTask = async (goal) => {
+  const handleStartTask = async (goal, profile = null) => {
     if (!goal || !goal.trim() || isStarting) return
     setIsStarting(true)
     setTaskError(null)
 
     try {
+      const payload = { goal: goal.trim() }
+      if (profile) {
+        payload.profile = profile
+      }
+
       const res = await fetch(`${API_BASE}/api/tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ goal: goal.trim() }),
+        body: JSON.stringify(payload),
       })
 
       if (!res.ok) {
@@ -93,9 +98,11 @@ export default function App() {
   const isRunning = isStarting || taskStatus === 'running' || taskStatus === 'waiting_for_approval'
   const taskId = currentTask?.task_id || null
   const objective = currentTask?.goal || ''
+  const candidateProfile = currentTask?.candidate_profile || null
   const observations = currentTask?.observations || []
   const evaluations = currentTask?.evaluations || []
   const applicationDrafts = currentTask?.application_drafts || []
+  const discoveredItems = currentTask?.discovered_items || []
   const currentStep = currentTask?.current_step || null
   const cycleCount = currentTask?.cycle_count || 0
   const verificationStatus = currentTask?.verification_status || 'not_started'
@@ -136,6 +143,7 @@ export default function App() {
             finalResponse={finalResponse}
             applicationDrafts={applicationDrafts}
             currentStep={currentStep}
+            candidateProfile={candidateProfile}
           />
         </div>
 
@@ -145,6 +153,8 @@ export default function App() {
             observations={observations}
             evaluations={evaluations}
             applicationDrafts={applicationDrafts}
+            discoveredItems={discoveredItems}
+            candidateProfile={candidateProfile}
             errors={allErrors}
             taskStatus={taskStatus}
           />
@@ -157,6 +167,7 @@ export default function App() {
         cycleCount={cycleCount}
         verificationStatus={verificationStatus}
         taskId={taskId}
+        candidateProfile={candidateProfile}
       />
     </div>
   )

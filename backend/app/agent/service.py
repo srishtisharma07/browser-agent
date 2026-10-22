@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 from pydantic import BaseModel, Field
 
-from app.agent.state import AgentState, TaskStatus
+from app.agent.state import AgentState, CandidateProfile, TaskStatus
 from app.agent.runner import AgentRunner, AgentGraphResult
 from app.config import LLMConfigurationError
 
@@ -62,7 +62,12 @@ class TaskManager:
         with self._lock:
             return [dict(t) for t in reversed(list(self._tasks.values()))]
 
-    def create_and_start_task(self, goal: str, max_cycles: int = 5) -> Dict[str, Any]:
+    def create_and_start_task(
+        self,
+        goal: str,
+        max_cycles: int = 5,
+        candidate_profile: Optional[CandidateProfile] = None,
+    ) -> Dict[str, Any]:
         """
         Validate input, ensure no duplicate running task, initialize in-memory state,
         and spawn background execution.
@@ -89,6 +94,7 @@ class TaskManager:
                 "task_id": task_id,
                 "goal": clean_goal,
                 "status": TaskStatus.RUNNING.value,
+                "candidate_profile": self._serialize_model(candidate_profile) if candidate_profile else None,
                 "observations": [],
                 "discovered_items": [],
                 "evaluations": [],
@@ -109,7 +115,7 @@ class TaskManager:
         # Spawn background execution thread
         worker = threading.Thread(
             target=self._run_task_worker,
-            args=(task_id, clean_goal, max_cycles),
+            args=(task_id, clean_goal, max_cycles, candidate_profile),
             daemon=True,
             name=f"AgentTaskWorker-{task_id}",
         )
@@ -125,7 +131,13 @@ class TaskManager:
             return obj.dict()
         return obj
 
-    def _run_task_worker(self, task_id: str, goal: str, max_cycles: int) -> None:
+    def _run_task_worker(
+        self,
+        task_id: str,
+        goal: str,
+        max_cycles: int,
+        candidate_profile: Optional[CandidateProfile] = None,
+    ) -> None:
         """
         Background worker that executes the AgentRunner loop and safely records all state changes.
         """
@@ -161,6 +173,7 @@ class TaskManager:
                 user_goal=goal,
                 task_id=task_id,
                 max_cycles=max_cycles,
+                candidate_profile=candidate_profile,
                 on_state_update=on_state_update,
             )
 
